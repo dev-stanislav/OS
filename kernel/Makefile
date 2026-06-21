@@ -40,8 +40,7 @@ BOOT_ASM := \
 	boot/boot.asm \
 	boot/gdt_load.asm \
 	boot/idt_load.asm \
-	src/interrupts.asm \
-	src/usermode.asm
+	src/interrupts.asm
 
 KERNEL_C := \
 	src/kernel.c \
@@ -57,8 +56,7 @@ KERNEL_C := \
 	src/heap.c \
 	src/paging.c \
 	src/net.c \
-	src/process.c \
-	src/user_demo.c \
+	src/users.c \
 	src/apps/app_manager.c \
 	src/apps/minifetch.c \
 	src/apps/calc.c \

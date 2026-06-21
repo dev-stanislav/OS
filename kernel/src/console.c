@@ -9,7 +9,7 @@
 #include "apps/app.h"
 #include "heap.h"
 #include "net.h"
-#include "process.h"
+#include "users.h"
 
 #define LINE_MAX 40
 #define HISTORY_MAX 16
@@ -43,7 +43,8 @@ static void redraw_line(void) {
 static void prompt(void) {
     char path[80];
     fs_path(current_dir, path, sizeof(path));
-    vga_write("minios:", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    vga_write(users_current_name(), VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    vga_write("@minios:", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
     size_t path_length = kstrlen(path);
     if (path_length > 24) {
         vga_write("...", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
@@ -80,7 +81,7 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping\nproc:   ps userdemo\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -125,8 +126,13 @@ static void execute_command(char *command) {
         if(count > 2) { if(net_ping_ip(args[2]))vga_write("ping sent; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK);else vga_write("usage: net ping 8.8.8.8\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
         else { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
     }
-    else if (kstrcmp(args[0], "ps") == 0) process_list();
-    else if (kstrcmp(args[0], "userdemo") == 0) process_run_user_demo();
+    else if (kstrcmp(args[0], "whoami") == 0) { vga_write(users_current_name(),VGA_COLOR_LIGHT_GREEN,VGA_COLOR_BLACK);vga_write(" (",VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write(users_current_role(),VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK);vga_write(")\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "user") == 0 && count > 1) {
+        if(kstrcmp(args[1],"list")==0) users_list();
+        else if(kstrcmp(args[1],"add")==0 && count>3) users_add(args[2],args[3]);
+        else if(kstrcmp(args[1],"login")==0 && count>2) { if(users_login(args[2]))current_dir=fs_resolve(users_current_home(),fs_root()); }
+        else vga_write("usage: user list | user add NAME root|user | user login NAME\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
+    }
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
     else if (kstrcmp(args[0], "tbf") == 0) { app_set_workdir(current_dir); app_run("tbf",0,0); }
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
@@ -152,7 +158,7 @@ static void execute_command(char *command) {
     else vga_write("unknown command; type help\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
 }
 
-void console_init(void) { fs_init(); current_dir=fs_root(); app_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
+void console_init(void) { fs_init(); users_init(); current_dir=fs_resolve(users_current_home(),fs_root()); app_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
 
 void console_update(void) {
     net_poll();

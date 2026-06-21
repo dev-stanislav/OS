@@ -9,7 +9,6 @@ idt_pointer_t idt_pointer;
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
-extern void syscall_stub(void);
 
 static void pic_remap(void) {
     outb(0x20, 0x11); outb(0xA0, 0x11);
@@ -41,8 +40,6 @@ void idt_init(void) {
 
     idt_set_entry(32, (uint32_t)irq0_stub, 0x08, 0x8E);
     idt_set_entry(33, (uint32_t)irq1_stub, 0x08, 0x8E);
-    /* DPL 3 trap gate: user syscalls keep IRQs enabled. */
-    idt_set_entry(0x80, (uint32_t)syscall_stub, 0x08, 0xEF);
     pic_remap();
     load_idt();
 }

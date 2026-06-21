@@ -9,7 +9,6 @@
 #include "heap.h"
 #include "paging.h"
 #include "net.h"
-#include "process.h"
 
 void kernel_main(void) {
     vga_init();
@@ -18,7 +17,6 @@ void kernel_main(void) {
     paging_init();
     disk_init();
     net_init();
-    process_init();
     idt_init();
     timer_init();
     keyboard_init();
