@@ -46,6 +46,7 @@ KERNEL_C := \
 	src/kernel.c \
 	src/vga.c \
 	src/gfx.c \
+	src/mouse.c \
 	src/gdt.c \
 	src/idt.c \
 	src/keyboard.c \

@@ -16,3 +16,4 @@ void gfx_init(void){vbe(VBE_ENABLE,0);vbe(VBE_XRES,GFX_WIDTH);vbe(VBE_YRES,GFX_H
 void gfx_clear(uint32_t color){for(uint32_t i=0;i<GFX_WIDTH*GFX_HEIGHT;i++)fb[i]=color;}
 void gfx_rect(int x,int y,int w,int h,uint32_t color){if(x<0){w+=x;x=0;}if(y<0){h+=y;y=0;}if(x+w>GFX_WIDTH)w=GFX_WIDTH-x;if(y+h>GFX_HEIGHT)h=GFX_HEIGHT-y;for(int yy=0;yy<h;yy++)for(int xx=0;xx<w;xx++)fb[(y+yy)*GFX_WIDTH+x+xx]=color;}
 void gfx_border(int x,int y,int w,int h,uint32_t color){gfx_rect(x,y,w,2,color);gfx_rect(x,y+h-2,w,2,color);gfx_rect(x,y,2,h,color);gfx_rect(x+w-2,y,2,h,color);}
+void gfx_cursor(int x,int y){for(int i=0;i<12;i++){if(x+i<GFX_WIDTH)fb[y*GFX_WIDTH+x+i]=0xFFFFFF;if(y+i<GFX_HEIGHT)fb[(y+i)*GFX_WIDTH+x]=0xFFFFFF;}}

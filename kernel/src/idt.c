@@ -9,14 +9,15 @@ idt_pointer_t idt_pointer;
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
+extern void irq12_stub(void);
 
 static void pic_remap(void) {
     outb(0x20, 0x11); outb(0xA0, 0x11);
     outb(0x21, 0x20); outb(0xA1, 0x28);
     outb(0x21, 0x04); outb(0xA1, 0x02);
     outb(0x21, 0x01); outb(0xA1, 0x01);
-    outb(0x21, 0xFC); /* timer + keyboard only */
-    outb(0xA1, 0xFF);
+    outb(0x21, 0xF8); /* timer + keyboard + cascade */
+    outb(0xA1, 0xEF); /* mouse IRQ12 */
 }
 
 void idt_set_entry(int index, uint32_t offset, uint16_t selector, uint8_t type) {
@@ -40,6 +41,7 @@ void idt_init(void) {
 
     idt_set_entry(32, (uint32_t)irq0_stub, 0x08, 0x8E);
     idt_set_entry(33, (uint32_t)irq1_stub, 0x08, 0x8E);
+    idt_set_entry(44, (uint32_t)irq12_stub, 0x08, 0x8E);
     pic_remap();
     load_idt();
 }

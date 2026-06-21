@@ -9,6 +9,7 @@
 #include "heap.h"
 #include "paging.h"
 #include "net.h"
+#include "mouse.h"
 
 void kernel_main(void) {
     vga_init();
@@ -20,6 +21,7 @@ void kernel_main(void) {
     idt_init();
     timer_init();
     keyboard_init();
+    mouse_init();
     
     vga_write("========================================\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("Welcome to MiniOS 32-bit Kernel!\n", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
