@@ -110,6 +110,7 @@ $(DISK_IMAGE):
 run: all $(DISK_IMAGE)
 	@command -v $(QEMU) >/dev/null 2>&1 || { echo "ERROR: qemu-system-i386 not found"; exit 1; }
 	$(QEMU) \
+		-vga std \
 		-kernel $(KERNEL) \
 		-drive file=$(DISK_IMAGE),format=raw,if=ide,index=0 \
 		-netdev user,id=net0 \
