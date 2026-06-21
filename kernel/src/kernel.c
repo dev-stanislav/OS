@@ -2,11 +2,16 @@
 #include "gdt.h"
 #include "idt.h"
 #include "console.h"
+#include "keyboard.h"
+#include "timer.h"
+#include "io.h"
 
 void kernel_main(void) {
     vga_init();
     gdt_init();
     idt_init();
+    timer_init();
+    keyboard_init();
     
     vga_write("========================================\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("Welcome to MiniOS 32-bit Kernel!\n", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
@@ -20,8 +25,10 @@ void kernel_main(void) {
     vga_write("\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     
     console_init();
+    enable_interrupts();
 
     for (;;) {
         console_update();
+        cpu_halt();
     }
 }

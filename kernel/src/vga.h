@@ -30,5 +30,10 @@ void vga_write(const char *str, uint8_t fg, uint8_t bg);
 void vga_clear(uint8_t fg, uint8_t bg);
 void vga_newline(void);
 void vga_backspace(uint8_t fg, uint8_t bg);
+size_t vga_get_row(void);
+size_t vga_get_col(void);
+void vga_set_position(size_t row, size_t col);
+void vga_put_at(size_t row, size_t col, char c, uint8_t fg, uint8_t bg);
+void vga_update_cursor(void);
 
 #endif

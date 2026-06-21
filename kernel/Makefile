@@ -39,7 +39,8 @@ ISO_GRUB_DIR := $(ISO_BOOT_DIR)/grub
 BOOT_ASM := \
 	boot/boot.asm \
 	boot/gdt_load.asm \
-	boot/idt_load.asm
+	boot/idt_load.asm \
+	src/interrupts.asm
 
 KERNEL_C := \
 	src/kernel.c \
@@ -47,7 +48,10 @@ KERNEL_C := \
 	src/gdt.c \
 	src/idt.c \
 	src/keyboard.c \
-	src/console.c
+	src/console.c \
+	src/timer.c \
+	src/libk.c \
+	src/fs.c
 
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))
