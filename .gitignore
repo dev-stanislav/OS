@@ -2,3 +2,12 @@ kernel/build/
 kernel/iso/
 kernel/minios.iso
 kernel/minios.img
+
+# Editor and operating-system temporary files
+.vscode/
+.idea/
+*.swp
+*.tmp
+*.log
+Thumbs.db
+Desktop.ini
