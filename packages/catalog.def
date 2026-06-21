@@ -7,4 +7,4 @@ PACKAGE(matrix, "Matrix", "1.0", "Matrix rain", app_matrix_start, app_matrix_key
 PACKAGE(mines, "MiniMines", "1.0", "8x8 minesweeper", app_mines_start, app_mines_key, 0)
 PACKAGE(free, "Free", "1.0", "Fullscreen text editor", app_free_start, app_free_key, 0)
 PACKAGE(tbf, "TBF", "1.0", "The Best File console manager", app_tbf_start, app_tbf_key, 0)
-PACKAGE(sproot, "SPROOT", "1.0", "MiniOS text desktop", app_sproot_start, app_sproot_key, 0)
+PACKAGE(sproot, "SPROOT", "1.0", "MiniOS framebuffer desktop", app_sproot_start, app_sproot_key, app_sproot_tick)

@@ -20,6 +20,7 @@ extern void app_mines_key(uint16_t key);
 extern void app_free_key(uint16_t key);
 extern void app_tbf_key(uint16_t key);
 extern void app_sproot_key(uint16_t key);
+extern void app_sproot_tick(uint32_t ticks);
 
 #define PACKAGE(id, name, version, description, start, key, tick) {#id, name, version, description, start, key, tick},
 static const app_package_t packages[] = {
