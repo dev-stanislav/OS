@@ -12,9 +12,12 @@
 #define VBE_LFB 0x40
 
 static volatile uint32_t *fb;
+static uint32_t cursor_saved[23];
+static int cursor_x, cursor_y;
+static uint8_t cursor_visible;
 static void vbe(uint16_t index,uint16_t value){outw(VBE_INDEX,index);outw(VBE_DATA,value);}
-void gfx_init(void){fb=(volatile uint32_t*)paging_framebuffer_address();vbe(VBE_ENABLE,0);vbe(VBE_XRES,GFX_WIDTH);vbe(VBE_YRES,GFX_HEIGHT);vbe(VBE_BPP,32);vbe(VBE_ENABLE,VBE_ENABLED|VBE_LFB);}
+void gfx_init(void){fb=(volatile uint32_t*)paging_framebuffer_address();cursor_visible=0;vbe(VBE_ENABLE,0);vbe(VBE_XRES,GFX_WIDTH);vbe(VBE_YRES,GFX_HEIGHT);vbe(VBE_BPP,32);vbe(VBE_ENABLE,VBE_ENABLED|VBE_LFB);}
 void gfx_clear(uint32_t color){for(uint32_t i=0;i<GFX_WIDTH*GFX_HEIGHT;i++)fb[i]=color;}
 void gfx_rect(int x,int y,int w,int h,uint32_t color){if(x<0){w+=x;x=0;}if(y<0){h+=y;y=0;}if(x+w>GFX_WIDTH)w=GFX_WIDTH-x;if(y+h>GFX_HEIGHT)h=GFX_HEIGHT-y;for(int yy=0;yy<h;yy++)for(int xx=0;xx<w;xx++)fb[(y+yy)*GFX_WIDTH+x+xx]=color;}
 void gfx_border(int x,int y,int w,int h,uint32_t color){gfx_rect(x,y,w,2,color);gfx_rect(x,y+h-2,w,2,color);gfx_rect(x,y,2,h,color);gfx_rect(x+w-2,y,2,h,color);}
-void gfx_cursor(int x,int y){for(int i=0;i<12;i++){if(x+i<GFX_WIDTH)fb[y*GFX_WIDTH+x+i]=0xFFFFFF;if(y+i<GFX_HEIGHT)fb[(y+i)*GFX_WIDTH+x]=0xFFFFFF;}}
+void gfx_cursor(int x,int y){if(cursor_visible){for(int i=0;i<12;i++)if(cursor_x+i<GFX_WIDTH&&cursor_y<GFX_HEIGHT)fb[cursor_y*GFX_WIDTH+cursor_x+i]=cursor_saved[i];for(int i=1;i<12;i++)if(cursor_x<GFX_WIDTH&&cursor_y+i<GFX_HEIGHT)fb[(cursor_y+i)*GFX_WIDTH+cursor_x]=cursor_saved[11+i];}cursor_x=x;cursor_y=y;for(int i=0;i<12;i++)cursor_saved[i]=(x+i<GFX_WIDTH&&y<GFX_HEIGHT)?fb[y*GFX_WIDTH+x+i]:0;for(int i=1;i<12;i++)cursor_saved[11+i]=(x<GFX_WIDTH&&y+i<GFX_HEIGHT)?fb[(y+i)*GFX_WIDTH+x]:0;for(int i=0;i<12;i++){if(x+i<GFX_WIDTH&&y<GFX_HEIGHT)fb[y*GFX_WIDTH+x+i]=0xFFFFFF;if(x<GFX_WIDTH&&y+i<GFX_HEIGHT)fb[(y+i)*GFX_WIDTH+x]=0xFFFFFF;}cursor_visible=1;}
