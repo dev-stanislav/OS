@@ -68,6 +68,8 @@ KERNEL_C := \
 	src/apps/mines.c \
 	src/apps/free.c \
 	src/apps/tbf.c \
+	src/apps/paint.c \
+	src/apps/terminal.c \
 	src/apps/sproot.c
 
 # Objects

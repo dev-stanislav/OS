@@ -3,6 +3,7 @@
 #include "../keyboard.h"
 #include "../libk.h"
 #include "../vga.h"
+#include "../gfx.h"
 
 extern void app_minifetch_start(char **args, uint8_t count);
 extern void app_calc_start(char **args, uint8_t count);
@@ -21,6 +22,14 @@ extern void app_free_key(uint16_t key);
 extern void app_tbf_key(uint16_t key);
 extern void app_sproot_key(uint16_t key);
 extern void app_sproot_tick(uint32_t ticks);
+extern void app_tbf_tick(uint32_t ticks);
+extern void app_free_tick(uint32_t ticks);
+extern void app_paint_start(char **args, uint8_t count);
+extern void app_paint_key(uint16_t key);
+extern void app_paint_tick(uint32_t ticks);
+extern void app_terminal_start(char **args, uint8_t count);
+extern void app_terminal_key(uint16_t key);
+extern void app_terminal_tick(uint32_t ticks);
 
 #define PACKAGE(id, name, version, description, start, key, tick) {#id, name, version, description, start, key, tick},
 static const app_package_t packages[] = {
@@ -49,7 +58,7 @@ static void status(const char *message, uint8_t color) { vga_write(message, colo
 void app_init(void) {
     active=0; working_dir=fs_root();
     (void)fs_create("/apps",FS_DIR,fs_root());
-    for (uint8_t i=0;i<PACKAGE_COUNT;i++) { char path[40]; package_path(path,packages[i].id); installed[i]=fs_resolve(path,fs_root())>=0; if(kstrcmp(packages[i].id,"tbf")==0||kstrcmp(packages[i].id,"sproot")==0)installed[i]=1; }
+    for (uint8_t i=0;i<PACKAGE_COUNT;i++) { char path[40]; package_path(path,packages[i].id); installed[i]=fs_resolve(path,fs_root())>=0; if(kstrcmp(packages[i].id,"tbf")==0||kstrcmp(packages[i].id,"sproot")==0||kstrcmp(packages[i].id,"free")==0||kstrcmp(packages[i].id,"paint")==0||kstrcmp(packages[i].id,"terminal")==0)installed[i]=1; }
 }
 
 void app_set_workdir(int directory) { working_dir = directory; }
@@ -79,7 +88,7 @@ void app_install(const char *id) {
 }
 
 void app_remove(const char *id) {
-    int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(kstrcmp(id,"tbf")==0||kstrcmp(id,"sproot")==0){status("built-in app cannot be removed",VGA_COLOR_LIGHT_BROWN);return;} if(!installed[index]){status("not installed",VGA_COLOR_LIGHT_BROWN);return;}
+    int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(kstrcmp(id,"tbf")==0||kstrcmp(id,"sproot")==0||kstrcmp(id,"free")==0||kstrcmp(id,"paint")==0||kstrcmp(id,"terminal")==0){status("built-in app cannot be removed",VGA_COLOR_LIGHT_BROWN);return;} if(!installed[index]){status("not installed",VGA_COLOR_LIGHT_BROWN);return;}
     char path[40]; package_path(path,id);
     (void)fs_remove(path,fs_root(),0); installed[index]=0; status("removed",VGA_COLOR_LIGHT_GREEN);
 }
@@ -91,5 +100,6 @@ void app_run(const char *id, char **args, uint8_t count) {
 }
 
 uint8_t app_is_active(void) { return active != 0; }
-void app_handle_key(uint16_t key) { if(!active)return; if(key==KEY_ESCAPE || key==KEY_INTERRUPT){active=0;vga_clear(VGA_COLOR_WHITE,VGA_COLOR_BLACK);return;} if(active->key)active->key(key); }
+void app_handle_key(uint16_t key) { if(!active)return; if(key==KEY_ESCAPE || key==KEY_INTERRUPT){app_exit_gui();return;} if(active->key)active->key(key); }
 void app_handle_tick(uint32_t ticks) { if(active && active->tick)active->tick(ticks); }
+void app_exit_gui(void) { gfx_shutdown(); active=0; vga_clear(VGA_COLOR_WHITE,VGA_COLOR_BLACK); }

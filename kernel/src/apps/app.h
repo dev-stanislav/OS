@@ -28,5 +28,6 @@ int app_get_workdir(void);
 uint8_t app_is_active(void);
 void app_handle_key(uint16_t key);
 void app_handle_tick(uint32_t ticks);
+void app_exit_gui(void);
 
 #endif

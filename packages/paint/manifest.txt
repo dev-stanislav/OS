@@ -1,0 +1,5 @@
+id=paint
+name=Paint
+version=1.0
+command=run paint
+description=Graphical canvas. Hold the left mouse button to draw; C clears.
