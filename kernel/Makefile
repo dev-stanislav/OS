@@ -65,7 +65,8 @@ KERNEL_C := \
 	src/apps/matrix.c \
 	src/apps/mines.c \
 	src/apps/free.c \
-	src/apps/tbf.c
+	src/apps/tbf.c \
+	src/apps/sproot.c
 
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))

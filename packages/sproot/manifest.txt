@@ -1,0 +1,5 @@
+id=sproot
+name=SPROOT
+version=1.0
+command=sproot
+description=Built-in VGA text desktop inspired by classic Windows.
