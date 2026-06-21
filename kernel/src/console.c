@@ -120,7 +120,10 @@ static void execute_command(char *command) {
         else if(net_gateway_known())vga_write("network: gateway resolved, ping pending\n",VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK);
         else vga_write("network: adapter ready, resolving gateway\n",VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK);
     }
-    else if (kstrcmp(args[0], "net") == 0 && count > 1 && kstrcmp(args[1], "ping") == 0) { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "net") == 0 && count > 1 && kstrcmp(args[1], "ping") == 0) {
+        if(count > 2) { if(net_ping_ip(args[2]))vga_write("ping sent; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK);else vga_write("usage: net ping 8.8.8.8\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
+        else { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
+    }
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
         if (kstrcmp(args[1], "list") == 0) app_list(0);

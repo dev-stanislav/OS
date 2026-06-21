@@ -80,6 +80,7 @@ minipkg remove calc
 net info
 net ping
 net info
+net ping 8.8.8.8
 ```
 
 `net ping` отправляет ARP-запрос и ICMP echo на шлюз. DNS, TCP, HTTP и скачивание пакетов пока не реализованы — они будут следующими слоями перед сетевым MiniPkg.

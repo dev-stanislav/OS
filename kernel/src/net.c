@@ -35,6 +35,8 @@ static uint8_t gateway_mac[6];
 static uint8_t gateway_known;
 static uint8_t ping_reply;
 static uint16_t ping_sequence;
+static uint8_t ping_target[4];
+static uint8_t ping_pending;
 
 static void copy_mac(uint8_t *out,const uint8_t *in){for(uint8_t i=0;i<6;i++)out[i]=in[i];}
 static uint8_t ip_equal(const uint8_t *a,const uint8_t *b){for(uint8_t i=0;i<4;i++)if(a[i]!=b[i])return 0;return 1;}
@@ -66,13 +68,13 @@ static void send_arp_request(void) {
 static void send_ping(void) {
     if(!gateway_known)return;
     uint8_t frame[42]; copy_mac(frame,gateway_mac);copy_mac(frame+6,local_mac);frame[12]=0x08;frame[13]=0;
-    uint8_t *ip=frame+14;ip[0]=0x45;ip[1]=0;ip[2]=0;ip[3]=28;ip[4]=0;ip[5]=1;ip[6]=0;ip[7]=0;ip[8]=64;ip[9]=IP_ICMP;ip[10]=ip[11]=0;kmemcpy(ip+12,local_ip,4);kmemcpy(ip+16,gateway_ip,4);uint16_t sum=checksum(ip,20);ip[10]=(uint8_t)(sum>>8);ip[11]=(uint8_t)sum;
+    uint8_t *ip=frame+14;ip[0]=0x45;ip[1]=0;ip[2]=0;ip[3]=28;ip[4]=0;ip[5]=1;ip[6]=0;ip[7]=0;ip[8]=64;ip[9]=IP_ICMP;ip[10]=ip[11]=0;kmemcpy(ip+12,local_ip,4);kmemcpy(ip+16,ping_target,4);uint16_t sum=checksum(ip,20);ip[10]=(uint8_t)(sum>>8);ip[11]=(uint8_t)sum;
     uint8_t *icmp=ip+20;icmp[0]=8;icmp[1]=0;icmp[2]=icmp[3]=0;icmp[4]=0x4D;icmp[5]=0x4F;icmp[6]=(uint8_t)(ping_sequence>>8);icmp[7]=(uint8_t)ping_sequence++;sum=checksum(icmp,8);icmp[2]=(uint8_t)(sum>>8);icmp[3]=(uint8_t)sum;rtl_send(frame,sizeof(frame));
 }
 
 static void handle_frame(const uint8_t *frame,uint16_t length) {
     if(length<14)return; uint16_t type=((uint16_t)frame[12]<<8)|frame[13];
-    if(type==ETH_ARP&&length>=42&&frame[20]==0&&frame[21]==2&&ip_equal(frame+28,gateway_ip)){copy_mac(gateway_mac,frame+22);gateway_known=1;return;}
+    if(type==ETH_ARP&&length>=42&&frame[20]==0&&frame[21]==2&&ip_equal(frame+28,gateway_ip)){copy_mac(gateway_mac,frame+22);gateway_known=1;if(ping_pending){ping_pending=0;send_ping();}return;}
     if(type==ETH_IPV4&&length>=42&&frame[23]==IP_ICMP&&ip_equal(frame+30,local_ip)){const uint8_t *icmp=frame+34;if(icmp[0]==0&&icmp[4]==0x4D&&icmp[5]==0x4F)ping_reply=1;}
 }
 
@@ -89,7 +91,11 @@ void net_poll(void) {
     while((inb(rtl_base+RTL_CMD)&1)==0){uint16_t status=*(uint16_t*)(rx_buffer+rx_offset);uint16_t length=*(uint16_t*)(rx_buffer+rx_offset+2);if((status&1)&&length>=4&&length<=RTL_RX_BUF)handle_frame(rx_buffer+rx_offset+4,(uint16_t)(length-4));uint16_t next=(uint16_t)((rx_offset+length+4+3)&~3);if(next>=RTL_RX_BUF)next-=RTL_RX_BUF;rx_offset=next;outw(rtl_base+RTL_CAPR,(uint16_t)(rx_offset-16));}
 }
 
-void net_ping_gateway(void) { ping_reply=0;if(!rtl_found)return;if(gateway_known)send_ping();else send_arp_request(); }
+static uint8_t parse_ip(const char *text,uint8_t *ip) {
+    for(uint8_t part=0;part<4;part++) { uint16_t value=0;uint8_t digits=0;while(*text>='0'&&*text<='9'){value=(uint16_t)(value*10+(*text++-'0'));digits++;if(value>255)return 0;}if(!digits)return 0;ip[part]=(uint8_t)value;if(part<3){if(*text++!='.')return 0;}else if(*text)return 0; } return 1;
+}
+void net_ping_gateway(void) { kmemcpy(ping_target,gateway_ip,4);ping_reply=0;ping_pending=1;if(!rtl_found)return;if(gateway_known){ping_pending=0;send_ping();}else send_arp_request(); }
+uint8_t net_ping_ip(const char *address) { if(!parse_ip(address,ping_target))return 0; ping_reply=0;ping_pending=1;if(!rtl_found)return 1;if(gateway_known){ping_pending=0;send_ping();}else send_arp_request();return 1; }
 uint8_t net_ready(void){return rtl_found;}
 uint8_t net_gateway_known(void){return gateway_known;}
 uint8_t net_ping_ok(void){return ping_reply;}
