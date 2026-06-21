@@ -76,7 +76,25 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("fun:    game     write <file> \"text\"\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minifetch game     write <file> \"text\"\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+}
+
+static void command_minifetch(void) {
+    vga_write("       __  __ _       _  ___  ____\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("      |  \\/  (_)_ __ (_)/ _ \\ / ___|\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("      | |\\/| | | '_ \\| | | | \\___ \\ \n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("      | |  | | | | | | | |_| |___) |\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("      |_|  |_|_|_| |_|_|\\___/|____/\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write("OS:       MiniOS experimental kernel\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write("Kernel:   i686, protected mode\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write("Terminal: MiniOS shell v1\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write("Files:    RAM FS, ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    print_number(fs_used_count());
+    vga_write("/32 nodes used\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write("Uptime:   ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    print_number(timer_ticks() / TIMER_HZ);
+    vga_write(" seconds\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -111,6 +129,7 @@ static void execute_command(char *command) {
     else if (kstrcmp(args[0], "about") == 0 || kstrcmp(args[0], "uname") == 0) vga_write("MiniOS i686 v1 experimental kernel\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "uptime") == 0) { vga_write("uptime: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(timer_ticks() / TIMER_HZ); vga_write(" s\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "mem") == 0) { vga_write("RAM FS nodes: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(fs_used_count()); vga_write("/32, file max: 1024 bytes\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "minifetch") == 0) command_minifetch();
     else if (kstrcmp(args[0], "pwd") == 0) { char path[80]; fs_path(current_dir,path,sizeof(path)); vga_write(path,VGA_COLOR_WHITE,VGA_COLOR_BLACK); vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "ls") == 0) command_ls(count > 1 ? args[1] : ".");
     else if (kstrcmp(args[0], "cd") == 0) { int target = fs_resolve(count > 1 ? args[1] : "/", current_dir); const fs_node_t *node = fs_node(target); if (node && node->type == FS_DIR) current_dir = target; else vga_write("directory not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
