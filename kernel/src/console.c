@@ -147,6 +147,12 @@ void console_update(void) {
         return;
     }
     if (!key) return;
+    if (key == KEY_INTERRUPT) {
+        vga_set_position(input_row, input_col + line_length);
+        vga_write("^C\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        prompt();
+        return;
+    }
     if (key == KEY_LEFT && line_cursor) { line_cursor--; redraw_line(); }
     else if (key == KEY_RIGHT && line_cursor < line_length) { line_cursor++; redraw_line(); }
     else if (key == KEY_HOME) { line_cursor=0; redraw_line(); }

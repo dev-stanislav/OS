@@ -6,6 +6,7 @@
 enum key_code {
     KEY_NONE = 0,
     KEY_ESCAPE = 127,
+    KEY_INTERRUPT,
     KEY_LEFT = 128, KEY_RIGHT, KEY_UP, KEY_DOWN,
     KEY_HOME, KEY_END, KEY_DELETE
 };

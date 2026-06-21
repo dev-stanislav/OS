@@ -1,5 +1,6 @@
 #include "app.h"
 #include "../fs.h"
+#include "../keyboard.h"
 #include "../libk.h"
 #include "../vga.h"
 
@@ -69,5 +70,5 @@ void app_run(const char *id, char **args, uint8_t count) {
 }
 
 uint8_t app_is_active(void) { return active != 0; }
-void app_handle_key(uint16_t key) { if(!active)return; if(key==127){active=0;vga_clear(VGA_COLOR_WHITE,VGA_COLOR_BLACK);return;} if(active->key)active->key(key); }
+void app_handle_key(uint16_t key) { if(!active)return; if(key==KEY_ESCAPE || key==KEY_INTERRUPT){active=0;vga_clear(VGA_COLOR_WHITE,VGA_COLOR_BLACK);return;} if(active->key)active->key(key); }
 void app_handle_tick(uint32_t ticks) { if(active && active->tick)active->tick(ticks); }

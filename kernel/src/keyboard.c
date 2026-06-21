@@ -9,6 +9,7 @@ static volatile uint16_t events[KEYBOARD_BUFFER_SIZE];
 static volatile uint8_t read_index;
 static volatile uint8_t write_index;
 static uint8_t shift_pressed;
+static uint8_t ctrl_pressed;
 static uint8_t caps_lock;
 static uint8_t extended_prefix;
 
@@ -41,7 +42,7 @@ static void push_event(uint16_t event) {
 
 void keyboard_init(void) {
     read_index = write_index = 0;
-    shift_pressed = caps_lock = extended_prefix = 0;
+    shift_pressed = ctrl_pressed = caps_lock = extended_prefix = 0;
     while (inb(KEYBOARD_STATUS) & 1) (void)inb(KEYBOARD_DATA);
 }
 
@@ -51,6 +52,7 @@ void keyboard_irq_handler(void) {
     uint8_t released = scan & 0x80;
     scan &= 0x7F;
     if (scan == 42 || scan == 54) { shift_pressed = !released; extended_prefix = 0; return; }
+    if (scan == 29) { ctrl_pressed = !released; extended_prefix = 0; return; }
     if (scan == 58 && !released) { caps_lock ^= 1; extended_prefix = 0; return; }
     if (released) { extended_prefix = 0; return; }
 
@@ -72,7 +74,8 @@ void keyboard_irq_handler(void) {
     else if (scan == 28) push_event('\n');
     else {
         char character = translate(scan);
-        if (character) push_event((uint8_t)character);
+        if (ctrl_pressed && (character == 'c' || character == 'C')) push_event(KEY_INTERRUPT);
+        else if (character) push_event((uint8_t)character);
     }
 }
 

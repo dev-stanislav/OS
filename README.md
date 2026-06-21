@@ -68,7 +68,7 @@ run calc 12 * 7
 minipkg remove calc
 ```
 
-Каталог исходных manifest-файлов лежит в [`packages`](packages). Доступны `minifetch`, `calc`, `clock`, `files`, `matrix` и `mines`. Для интерактивных приложений `clock`, `files`, `matrix` и `mines` нажми `Esc`, чтобы вернуться в shell.
+Каталог исходных manifest-файлов лежит в [`packages`](packages). Доступны `minifetch`, `calc`, `clock`, `files`, `matrix` и `mines`. Для интерактивных приложений `clock`, `files`, `matrix` и `mines` нажми `Esc` или `Ctrl+C`, чтобы вернуться в shell.
 
 В игре введи цифру от `1` до `9`. Команда `exit` возвращает в shell.
 
