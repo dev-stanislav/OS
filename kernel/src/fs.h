@@ -6,6 +6,7 @@
 #define FS_MAX_NODES 32
 #define FS_NAME_MAX 24
 #define FS_FILE_MAX 1024
+#define FS_CAPACITY_BYTES (FS_MAX_NODES * FS_FILE_MAX)
 
 typedef enum { FS_FILE, FS_DIR } fs_type_t;
 typedef struct {
@@ -27,6 +28,8 @@ fs_result_t fs_remove(const char *path, int current, uint8_t directory);
 fs_result_t fs_write(const char *path, const char *text, int current);
 const fs_node_t *fs_node(int index);
 uint8_t fs_used_count(void);
+uint32_t fs_used_bytes(void);
+uint32_t fs_capacity_bytes(void);
 void fs_path(int index, char *buffer, uint16_t capacity);
 
 #endif

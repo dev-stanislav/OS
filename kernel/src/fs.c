@@ -133,6 +133,8 @@ fs_result_t fs_remove(const char *path, int current, uint8_t directory) {
 
 const fs_node_t *fs_node(int index) { return index >= 0 && index < FS_MAX_NODES && nodes[index].used ? &nodes[index] : 0; }
 uint8_t fs_used_count(void) { uint8_t count = 0; for (int i=0;i<FS_MAX_NODES;i++) if(nodes[i].used) count++; return count; }
+uint32_t fs_used_bytes(void) { uint32_t bytes=0; for(int i=0;i<FS_MAX_NODES;i++)if(nodes[i].used&&nodes[i].type==FS_FILE)bytes+=nodes[i].size; return bytes; }
+uint32_t fs_capacity_bytes(void) { return FS_CAPACITY_BYTES; }
 
 void fs_path(int index, char *buffer, uint16_t capacity) {
     int chain[16]; uint16_t count = 0;
