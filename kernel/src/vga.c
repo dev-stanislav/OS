@@ -31,7 +31,7 @@ void vga_update_cursor(void) {
     outb(0x3D4, 0x0E); outb(0x3D5, (uint8_t)(position >> 8));
 }
 
-void vga_init(void) { vga_text_mode(); vga_clear(VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
+void vga_init(void) { vga_clear(VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
 
 void vga_put_at(size_t row, size_t col, char c, uint8_t fg, uint8_t bg) {
     if (row < VGA_HEIGHT && col < VGA_WIDTH) vga_buffer[row * VGA_WIDTH + col] = vga_entry(c, fg, bg);
