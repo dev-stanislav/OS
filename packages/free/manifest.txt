@@ -1,0 +1,5 @@
+id=free
+name=Free
+version=1.0
+command=run free notes.txt
+description=Fullscreen text editor. Ctrl+S saves, Ctrl+C or Esc exits.

@@ -62,7 +62,8 @@ KERNEL_C := \
 	src/apps/clock.c \
 	src/apps/files.c \
 	src/apps/matrix.c \
-	src/apps/mines.c
+	src/apps/mines.c \
+	src/apps/free.c
 
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))

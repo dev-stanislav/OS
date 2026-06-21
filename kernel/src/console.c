@@ -133,7 +133,7 @@ static void execute_command(char *command) {
         else if (kstrcmp(args[1], "remove") == 0 && count > 2) app_remove(args[2]);
         else vga_write("usage: minipkg list|installed|info|install|remove <id>\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
     }
-    else if (kstrcmp(args[0], "run") == 0 && count > 1) app_run(args[1],args+2,(uint8_t)(count-2));
+    else if (kstrcmp(args[0], "run") == 0 && count > 1) { app_set_workdir(current_dir); app_run(args[1],args+2,(uint8_t)(count-2)); }
     else if (kstrcmp(args[0], "pwd") == 0) { char path[80]; fs_path(current_dir,path,sizeof(path)); vga_write(path,VGA_COLOR_WHITE,VGA_COLOR_BLACK); vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "ls") == 0) command_ls(count > 1 ? args[1] : ".");
     else if (kstrcmp(args[0], "cd") == 0) { int target = fs_resolve(count > 1 ? args[1] : "/", current_dir); const fs_node_t *node = fs_node(target); if (node && node->type == FS_DIR) current_dir = target; else vga_write("directory not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }

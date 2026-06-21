@@ -5,3 +5,4 @@ PACKAGE(clock, "Clock", "1.0", "Live uptime clock", app_clock_start, app_clock_k
 PACKAGE(files, "Files", "1.0", "RAM filesystem browser", app_files_start, app_files_key, 0)
 PACKAGE(matrix, "Matrix", "1.0", "Matrix rain", app_matrix_start, app_matrix_key, app_matrix_tick)
 PACKAGE(mines, "MiniMines", "1.0", "8x8 minesweeper", app_mines_start, app_mines_key, 0)
+PACKAGE(free, "Free", "1.0", "Fullscreen text editor", app_free_start, app_free_key, 0)

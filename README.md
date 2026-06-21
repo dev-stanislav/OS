@@ -40,6 +40,45 @@ make run
 
 QEMU откроет отдельное окно с MiniOS. Для выхода нажми `Ctrl+A`, затем `X`.
 
+### Быстрый запуск с нуля
+
+1. Установи [MSYS2](https://www.msys2.org/) и открой терминал **MSYS2 UCRT64**. Не PowerShell и не обычный MSYS — именно UCRT64.
+2. Установи инструменты один раз:
+
+   ```sh
+   pacman -S --needed make nasm mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-lld mingw-w64-ucrt-x86_64-qemu
+   ```
+
+3. Перейди в папку с проектом и запусти систему:
+
+   ```sh
+   cd /c/Users/ТВОЁ_ИМЯ/Documents/OS/kernel
+   make run
+   ```
+
+4. В окне QEMU появится приглашение `minios:/ >`. Для первой проверки введи:
+
+   ```text
+   help
+   minipkg list
+   minipkg install minifetch
+   run minifetch
+   net ping
+   net info
+   ```
+
+### Диск и сброс данных
+
+- При первом `make run` автоматически создаётся `minios.img` — диск MiniOS.
+- `make clean` пересобирает ядро, но сохраняет файлы и установленные пакеты на диске.
+- Если нужен совершенно чистый MiniOS, выполни `make distclean`, затем `make run`.
+
+### Если не запускается
+
+- `qemu-system-i386 not found` — установи QEMU командой из шага 2 и перезапусти UCRT64.
+- `clang` или `nasm not found` — установи недостающий пакет из шага 2.
+- Чёрный экран после изменения ядра — выполни `make clean && make run` и проверь последние изменения.
+
 ## Команды MiniOS
 
 | Команда | Что делает |
@@ -70,7 +109,18 @@ run calc 12 * 7
 minipkg remove calc
 ```
 
-Каталог исходных manifest-файлов лежит в [`packages`](packages). Доступны `minifetch`, `calc`, `clock`, `files`, `matrix` и `mines`. Для интерактивных приложений `clock`, `files`, `matrix` и `mines` нажми `Esc` или `Ctrl+C`, чтобы вернуться в shell.
+Каталог исходных manifest-файлов лежит в [`packages`](packages). Доступны `minifetch`, `calc`, `clock`, `files`, `matrix`, `mines` и `free`. Для интерактивных приложений нажми `Esc` или `Ctrl+C`, чтобы вернуться в shell.
+
+## Редактор Free
+
+`free` — встроенный полноэкранный текстовый редактор для файлов на диске.
+
+```text
+minipkg install free
+run free notes.txt
+```
+
+Стрелки перемещают курсор, `Backspace` и `Delete` удаляют символы, `Enter` создаёт новую строку. Нажми `Ctrl+S`, чтобы сохранить файл, и `Ctrl+C` или `Esc`, чтобы выйти.
 
 ## Сеть
 

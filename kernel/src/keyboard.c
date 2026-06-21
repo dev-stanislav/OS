@@ -75,6 +75,7 @@ void keyboard_irq_handler(void) {
     else {
         char character = translate(scan);
         if (ctrl_pressed && (character == 'c' || character == 'C')) push_event(KEY_INTERRUPT);
+        else if (ctrl_pressed && (character == 's' || character == 'S')) push_event(KEY_SAVE);
         else if (character) push_event((uint8_t)character);
     }
 }

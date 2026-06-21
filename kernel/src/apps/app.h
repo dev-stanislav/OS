@@ -23,6 +23,8 @@ void app_info(const char *id);
 void app_install(const char *id);
 void app_remove(const char *id);
 void app_run(const char *id, char **args, uint8_t count);
+void app_set_workdir(int directory);
+int app_get_workdir(void);
 uint8_t app_is_active(void);
 void app_handle_key(uint16_t key);
 void app_handle_tick(uint32_t ticks);

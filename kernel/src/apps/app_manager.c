@@ -10,10 +10,12 @@ extern void app_clock_start(char **args, uint8_t count);
 extern void app_files_start(char **args, uint8_t count);
 extern void app_matrix_start(char **args, uint8_t count);
 extern void app_mines_start(char **args, uint8_t count);
+extern void app_free_start(char **args, uint8_t count);
 extern void app_clock_key(uint16_t key); extern void app_clock_tick(uint32_t ticks);
 extern void app_files_key(uint16_t key);
 extern void app_matrix_key(uint16_t key); extern void app_matrix_tick(uint32_t ticks);
 extern void app_mines_key(uint16_t key);
+extern void app_free_key(uint16_t key);
 
 #define PACKAGE(id, name, version, description, start, key, tick) {#id, name, version, description, start, key, tick},
 static const app_package_t packages[] = {
@@ -24,6 +26,7 @@ static const app_package_t packages[] = {
 #define PACKAGE_COUNT (sizeof(packages) / sizeof(packages[0]))
 static uint8_t installed[PACKAGE_COUNT];
 static const app_package_t *active;
+static int working_dir;
 
 static void package_path(char *path, const char *id) {
     kstrcpy(path, "/apps/", 40);
@@ -39,10 +42,13 @@ static int package_index(const char *id) {
 static void status(const char *message, uint8_t color) { vga_write(message, color, VGA_COLOR_BLACK); vga_write("\n", color, VGA_COLOR_BLACK); }
 
 void app_init(void) {
-    active=0;
+    active=0; working_dir=fs_root();
     (void)fs_create("/apps",FS_DIR,fs_root());
     for (uint8_t i=0;i<PACKAGE_COUNT;i++) { char path[40]; package_path(path,packages[i].id); installed[i]=fs_resolve(path,fs_root())>=0; }
 }
+
+void app_set_workdir(int directory) { working_dir = directory; }
+int app_get_workdir(void) { return working_dir; }
 
 void app_list(uint8_t installed_only) {
     for (uint8_t i=0;i<PACKAGE_COUNT;i++) if (!installed_only || installed[i]) {
