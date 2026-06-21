@@ -4,6 +4,7 @@
 
 static fs_node_t nodes[FS_MAX_NODES];
 static uint8_t storage_online;
+static uint8_t actor_uid, actor_root = 1;
 
 #define FS_DISK_MAGIC 0x53464E4Du /* MNFS */
 #define FS_DISK_VERSION 1u
@@ -39,6 +40,9 @@ static int find_child(int parent, const char *name) {
         if (nodes[index].used && nodes[index].parent == parent && kstrcmp(nodes[index].name, name) == 0) return index;
     return -1;
 }
+void fs_set_actor(uint8_t uid,uint8_t root){actor_uid=uid;actor_root=root;}
+uint8_t fs_can_read(int index){const fs_node_t*n=fs_node(index);return n&&(actor_root||n->owner==actor_uid||(n->mode&004));}
+uint8_t fs_can_write(int index){const fs_node_t*n=fs_node(index);return n&&(actor_root||(n->owner==actor_uid&&(n->mode&0200))||(n->owner!=actor_uid&&(n->mode&0002)));}
 
 static int resolve_component_path(const char *path, int current) {
     int node = path[0] == '/' ? 0 : current;
@@ -67,6 +71,7 @@ void fs_init(void) {
     if(disk_ready() && fs_load()) { storage_online = 1; return; }
     kmemset(nodes, 0, sizeof(nodes));
     nodes[0].used = 1; nodes[0].type = FS_DIR; nodes[0].parent = -1;
+    nodes[0].owner = 0; nodes[0].mode = 0755;
     (void)fs_create("/games", FS_DIR, 0);
     (void)fs_write("/readme.txt", "MiniOS disk filesystem. Files survive reboot.", 0);
     storage_online = disk_ready();
@@ -100,9 +105,11 @@ fs_result_t fs_create(const char *path, fs_type_t type, int current) {
     int parent; char name[FS_NAME_MAX + 1];
     fs_result_t result = split_parent(path, current, &parent, name);
     if (result != FS_OK) return result;
+    if(!fs_can_write(parent)) return FS_INVALID;
     if (find_child(parent, name) >= 0) return FS_EXISTS;
     for (int index = 1; index < FS_MAX_NODES; index++) if (!nodes[index].used) {
         nodes[index].used = 1; nodes[index].type = type; nodes[index].parent = (int8_t)parent; nodes[index].size = 0;
+        nodes[index].owner=actor_uid; nodes[index].mode=type==FS_DIR?0755:0644;
         kstrcpy(nodes[index].name, name, sizeof(nodes[index].name)); nodes[index].data[0] = '\0';
         fs_sync();
         return FS_OK;
@@ -114,6 +121,7 @@ fs_result_t fs_write(const char *path, const char *text, int current) {
     int index = fs_resolve(path, current);
     if (index < 0) { fs_result_t created = fs_create(path, FS_FILE, current); if (created != FS_OK) return created; index = fs_resolve(path, current); }
     if (nodes[index].type != FS_FILE) return FS_INVALID;
+    if(!fs_can_write(index))return FS_INVALID;
     size_t length = kstrlen(text);
     if (length > FS_FILE_MAX) return FS_TOO_LARGE;
     kstrcpy(nodes[index].data, text, sizeof(nodes[index].data)); nodes[index].size = (uint16_t)length;
@@ -125,11 +133,15 @@ fs_result_t fs_remove(const char *path, int current, uint8_t directory) {
     int index = fs_resolve(path, current);
     if (index <= 0) return FS_NOT_FOUND;
     if ((nodes[index].type == FS_DIR) != directory) return FS_INVALID;
+    if(!fs_can_write(index))return FS_INVALID;
     if (directory) for (int child = 0; child < FS_MAX_NODES; child++) if (nodes[child].used && nodes[child].parent == index) return FS_NOT_EMPTY;
     nodes[index].used = 0;
     fs_sync();
     return FS_OK;
 }
+
+void fs_chmod(const char *path,uint16_t mode,int current){int i=fs_resolve(path,current);if(i>=0&&(actor_root||nodes[i].owner==actor_uid)){nodes[i].mode=mode;fs_sync();}}
+void fs_chown(const char *path,uint8_t owner,int current){int i=fs_resolve(path,current);if(i>=0&&actor_root){nodes[i].owner=owner;fs_sync();}}
 
 const fs_node_t *fs_node(int index) { return index >= 0 && index < FS_MAX_NODES && nodes[index].used ? &nodes[index] : 0; }
 uint8_t fs_used_count(void) { uint8_t count = 0; for (int i=0;i<FS_MAX_NODES;i++) if(nodes[i].used) count++; return count; }

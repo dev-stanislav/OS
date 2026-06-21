@@ -12,6 +12,8 @@ typedef enum { FS_FILE, FS_DIR } fs_type_t;
 typedef struct {
     uint8_t used;
     fs_type_t type;
+    uint8_t owner;
+    uint16_t mode;
     int8_t parent;
     char name[FS_NAME_MAX + 1];
     uint16_t size;
@@ -31,5 +33,10 @@ uint8_t fs_used_count(void);
 uint32_t fs_used_bytes(void);
 uint32_t fs_capacity_bytes(void);
 void fs_path(int index, char *buffer, uint16_t capacity);
+void fs_set_actor(uint8_t uid, uint8_t root);
+uint8_t fs_can_read(int index);
+uint8_t fs_can_write(int index);
+void fs_chmod(const char *path, uint16_t mode, int current);
+void fs_chown(const char *path, uint8_t owner, int current);
 
 #endif

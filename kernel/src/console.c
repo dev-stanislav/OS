@@ -149,10 +149,12 @@ static void execute_command(char *command) {
     else if (kstrcmp(args[0], "cd") == 0) { int target = fs_resolve(count > 1 ? args[1] : "/", current_dir); const fs_node_t *node = fs_node(target); if (node && node->type == FS_DIR) current_dir = target; else vga_write("directory not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "mkdir") == 0 && count > 1) { fs_result_t r=fs_create(args[1],FS_DIR,current_dir); if(r!=FS_OK)print_result(r); }
     else if (kstrcmp(args[0], "touch") == 0 && count > 1) { fs_result_t r=fs_create(args[1],FS_FILE,current_dir); if(r!=FS_OK && r!=FS_EXISTS)print_result(r); }
-    else if (kstrcmp(args[0], "cat") == 0 && count > 1) { int f=fs_resolve(args[1],current_dir); const fs_node_t*n=fs_node(f); if(n&&n->type==FS_FILE){vga_write(n->data,VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK);}else vga_write("file not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "cat") == 0 && count > 1) { int f=fs_resolve(args[1],current_dir); const fs_node_t*n=fs_node(f); if(n&&n->type==FS_FILE&&fs_can_read(f)){vga_write(n->data,VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK);}else vga_write("file not found or permission denied\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "write") == 0 && count > 1) { fs_result_t r=fs_write(args[1],count>2?args[2]:"",current_dir); if(r!=FS_OK)print_result(r); }
     else if (kstrcmp(args[0], "rm") == 0 && count > 1) { fs_result_t r=fs_remove(args[1],current_dir,0); if(r!=FS_OK)print_result(r); }
     else if (kstrcmp(args[0], "rmdir") == 0 && count > 1) { fs_result_t r=fs_remove(args[1],current_dir,1); if(r!=FS_OK)print_result(r); }
+    else if (kstrcmp(args[0], "chmod") == 0 && count > 2) { uint16_t mode=0;for(uint8_t i=0;args[1][i];i++){if(args[1][i]<'0'||args[1][i]>'7'){mode=0;break;}mode=(uint16_t)(mode*8+args[1][i]-'0');}fs_chmod(args[2],mode,current_dir); }
+    else if (kstrcmp(args[0], "chown") == 0 && count > 2) { int uid=users_find_uid(args[1]);if(uid<0)vga_write("user not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);else if(!users_is_root())vga_write("only root can chown\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);else fs_chown(args[2],(uint8_t)uid,current_dir); }
     else if (kstrcmp(args[0], "game") == 0) { secret=(uint8_t)(((++games_played*3)%9)+1);game_active=1;vga_write("guess a number from 1 to 9\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "reboot") == 0) { vga_write("rebooting...\n",VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK); outb(0x64,0xFE); }
     else vga_write("unknown command; type help\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
