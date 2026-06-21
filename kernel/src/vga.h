@@ -25,6 +25,7 @@
 #define VGA_COLOR_WHITE 15
 
 void vga_init(void);
+void vga_text_mode(void);
 void vga_putchar(char c, uint8_t fg, uint8_t bg);
 void vga_write(const char *str, uint8_t fg, uint8_t bg);
 void vga_clear(uint8_t fg, uint8_t bg);
