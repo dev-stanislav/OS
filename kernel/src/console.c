@@ -125,6 +125,7 @@ static void execute_command(char *command) {
         else { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
     }
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
+    else if (kstrcmp(args[0], "tbf") == 0) { app_set_workdir(current_dir); app_run("tbf",0,0); }
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
         if (kstrcmp(args[1], "list") == 0) app_list(0);
         else if (kstrcmp(args[1], "installed") == 0) app_list(1);
