@@ -6,12 +6,17 @@ void *kmemset(void *destination, int value, size_t count) {
     return destination;
 }
 
+/* Clang may emit these symbols for local aggregate initialization. */
+void *memset(void *destination, int value, size_t count) { return kmemset(destination, value, count); }
+
 void *kmemcpy(void *destination, const void *source, size_t count) {
     uint8_t *out = (uint8_t *)destination;
     const uint8_t *in = (const uint8_t *)source;
     while (count--) *out++ = *in++;
     return destination;
 }
+
+void *memcpy(void *destination, const void *source, size_t count) { return kmemcpy(destination, source, count); }
 
 size_t kstrlen(const char *text) {
     size_t length = 0;

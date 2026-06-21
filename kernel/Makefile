@@ -51,7 +51,14 @@ KERNEL_C := \
 	src/console.c \
 	src/timer.c \
 	src/libk.c \
-	src/fs.c
+	src/fs.c \
+	src/apps/app_manager.c \
+	src/apps/minifetch.c \
+	src/apps/calc.c \
+	src/apps/clock.c \
+	src/apps/files.c \
+	src/apps/matrix.c \
+	src/apps/mines.c
 
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))

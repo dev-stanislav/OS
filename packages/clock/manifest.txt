@@ -1,0 +1,5 @@
+id=clock
+name=Clock
+version=1.0
+command=run clock
+description=Live MiniOS uptime clock. Press Esc to exit.

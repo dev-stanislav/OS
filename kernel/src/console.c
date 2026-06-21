@@ -6,6 +6,7 @@
 #include "libk.h"
 #include "timer.h"
 #include "vga.h"
+#include "apps/app.h"
 
 #define LINE_MAX 40
 #define HISTORY_MAX 16
@@ -76,25 +77,7 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minifetch game     write <file> \"text\"\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-}
-
-static void command_minifetch(void) {
-    vga_write("       __  __ _       _  ___  ____\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("      |  \\/  (_)_ __ (_)/ _ \\ / ___|\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("      | |\\/| | | '_ \\| | | | \\___ \\ \n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("      | |  | | | | | | | |_| |___) |\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("      |_|  |_|_|_| |_|_|\\___/|____/\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    vga_write("OS:       MiniOS experimental kernel\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    vga_write("Kernel:   i686, protected mode\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    vga_write("Terminal: MiniOS shell v1\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    vga_write("Files:    RAM FS, ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    print_number(fs_used_count());
-    vga_write("/32 nodes used\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    vga_write("Uptime:   ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    print_number(timer_ticks() / TIMER_HZ);
-    vga_write(" seconds\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run minifetch game\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -121,7 +104,7 @@ static void execute_game(char **args, uint8_t count) {
 }
 
 static void execute_command(char *command) {
-    char *args[4]; uint8_t count = parse_args(command, args, 4);
+    char *args[8]; uint8_t count = parse_args(command, args, 8);
     if (!count) return;
     if (game_active) { execute_game(args, count); return; }
     if (kstrcmp(args[0], "help") == 0) command_help();
@@ -129,7 +112,16 @@ static void execute_command(char *command) {
     else if (kstrcmp(args[0], "about") == 0 || kstrcmp(args[0], "uname") == 0) vga_write("MiniOS i686 v1 experimental kernel\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "uptime") == 0) { vga_write("uptime: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(timer_ticks() / TIMER_HZ); vga_write(" s\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "mem") == 0) { vga_write("RAM FS nodes: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(fs_used_count()); vga_write("/32, file max: 1024 bytes\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
-    else if (kstrcmp(args[0], "minifetch") == 0) command_minifetch();
+    else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
+    else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
+        if (kstrcmp(args[1], "list") == 0) app_list(0);
+        else if (kstrcmp(args[1], "installed") == 0) app_list(1);
+        else if (kstrcmp(args[1], "info") == 0 && count > 2) app_info(args[2]);
+        else if (kstrcmp(args[1], "install") == 0 && count > 2) app_install(args[2]);
+        else if (kstrcmp(args[1], "remove") == 0 && count > 2) app_remove(args[2]);
+        else vga_write("usage: minipkg list|installed|info|install|remove <id>\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
+    }
+    else if (kstrcmp(args[0], "run") == 0 && count > 1) app_run(args[1],args+2,(uint8_t)(count-2));
     else if (kstrcmp(args[0], "pwd") == 0) { char path[80]; fs_path(current_dir,path,sizeof(path)); vga_write(path,VGA_COLOR_WHITE,VGA_COLOR_BLACK); vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "ls") == 0) command_ls(count > 1 ? args[1] : ".");
     else if (kstrcmp(args[0], "cd") == 0) { int target = fs_resolve(count > 1 ? args[1] : "/", current_dir); const fs_node_t *node = fs_node(target); if (node && node->type == FS_DIR) current_dir = target; else vga_write("directory not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
@@ -144,10 +136,17 @@ static void execute_command(char *command) {
     else vga_write("unknown command; type help\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
 }
 
-void console_init(void) { current_dir=fs_root(); fs_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
+void console_init(void) { fs_init(); current_dir=fs_root(); app_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
 
 void console_update(void) {
-    uint16_t key = keyboard_pop_event(); if (!key) return;
+    uint16_t key = keyboard_pop_event();
+    if (app_is_active()) {
+        app_handle_tick(timer_ticks());
+        if (key) app_handle_key(key);
+        if (!app_is_active()) prompt();
+        return;
+    }
+    if (!key) return;
     if (key == KEY_LEFT && line_cursor) { line_cursor--; redraw_line(); }
     else if (key == KEY_RIGHT && line_cursor < line_length) { line_cursor++; redraw_line(); }
     else if (key == KEY_HOME) { line_cursor=0; redraw_line(); }
@@ -156,6 +155,6 @@ void console_update(void) {
     else if (key == KEY_UP && history_count && history_view) { history_view--;kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint8_t)kstrlen(line);redraw_line(); }
     else if (key == KEY_DOWN && history_view < history_count) { history_view++;if(history_view==history_count)line[0]='\0';else kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint8_t)kstrlen(line);redraw_line(); }
     else if (key == '\b' && line_cursor) { for(uint8_t i=line_cursor-1;i<line_length;i++)line[i]=line[i+1];line_cursor--;line_length--;redraw_line(); }
-    else if (key == '\n') { vga_set_position(input_row,input_col+line_length);vga_newline();line[line_length]='\0';add_history(line);execute_command(line);prompt(); }
+    else if (key == '\n') { vga_set_position(input_row,input_col+line_length);vga_newline();line[line_length]='\0';add_history(line);execute_command(line);if(!app_is_active())prompt(); }
     else if (key < 128 && line_length < LINE_MAX) { for(uint8_t i=line_length;i>line_cursor;i--)line[i]=line[i-1];line[line_cursor++]=(char)key;line_length++;line[line_length]='\0';redraw_line(); }
 }

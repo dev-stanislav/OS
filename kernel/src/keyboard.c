@@ -67,7 +67,8 @@ void keyboard_irq_handler(void) {
         extended_prefix = 0;
         return;
     }
-    if (scan == 14) push_event('\b');
+    if (scan == 1) push_event(KEY_ESCAPE);
+    else if (scan == 14) push_event('\b');
     else if (scan == 28) push_event('\n');
     else {
         char character = translate(scan);

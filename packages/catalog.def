@@ -1,0 +1,7 @@
+/* MiniPkg local catalog v1. Included by kernel/src/apps/app_manager.c. */
+PACKAGE(minifetch, "MiniFetch", "1.0", "System information", app_minifetch_start, 0, 0)
+PACKAGE(calc, "Calculator", "1.0", "Integer calculator", app_calc_start, 0, 0)
+PACKAGE(clock, "Clock", "1.0", "Live uptime clock", app_clock_start, app_clock_key, app_clock_tick)
+PACKAGE(files, "Files", "1.0", "RAM filesystem browser", app_files_start, app_files_key, 0)
+PACKAGE(matrix, "Matrix", "1.0", "Matrix rain", app_matrix_start, app_matrix_key, app_matrix_tick)
+PACKAGE(mines, "MiniMines", "1.0", "8x8 minesweeper", app_mines_start, app_mines_key, 0)
