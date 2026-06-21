@@ -36,6 +36,7 @@ user_exit_to_kernel:
     mov fs, ax
     mov gs, ax
     mov esp, [saved_kernel_esp]
+    sti
     jmp dword [saved_kernel_eip]
 
 user_demo_entry:
