@@ -8,6 +8,7 @@
 #include "vga.h"
 #include "apps/app.h"
 #include "heap.h"
+#include "net.h"
 
 #define LINE_MAX 40
 #define HISTORY_MAX 16
@@ -78,7 +79,7 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minipkg run minifetch game\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -113,6 +114,13 @@ static void execute_command(char *command) {
     else if (kstrcmp(args[0], "about") == 0 || kstrcmp(args[0], "uname") == 0) vga_write("MiniOS i686 v1 experimental kernel\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "uptime") == 0) { vga_write("uptime: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(timer_ticks() / TIMER_HZ); vga_write(" s\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "mem") == 0) { vga_write("Disk FS nodes: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(fs_used_count()); vga_write("/32, file max: 1024 bytes\nKernel heap: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(heap_used()); vga_write("/",VGA_COLOR_WHITE,VGA_COLOR_BLACK); print_number(heap_capacity()); vga_write(" bytes\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "net") == 0 && count > 1 && kstrcmp(args[1], "info") == 0) {
+        if(!net_ready())vga_write("network: RTL8139 not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
+        else if(net_ping_ok())vga_write("network: online, gateway ping replied\n",VGA_COLOR_LIGHT_GREEN,VGA_COLOR_BLACK);
+        else if(net_gateway_known())vga_write("network: gateway resolved, ping pending\n",VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK);
+        else vga_write("network: adapter ready, resolving gateway\n",VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK);
+    }
+    else if (kstrcmp(args[0], "net") == 0 && count > 1 && kstrcmp(args[1], "ping") == 0) { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
         if (kstrcmp(args[1], "list") == 0) app_list(0);
@@ -140,6 +148,7 @@ static void execute_command(char *command) {
 void console_init(void) { fs_init(); current_dir=fs_root(); app_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
 
 void console_update(void) {
+    net_poll();
     uint16_t key = keyboard_pop_event();
     if (app_is_active()) {
         app_handle_tick(timer_ticks());

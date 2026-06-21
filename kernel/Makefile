@@ -55,6 +55,7 @@ KERNEL_C := \
 	src/disk.c \
 	src/heap.c \
 	src/paging.c \
+	src/net.c \
 	src/apps/app_manager.c \
 	src/apps/minifetch.c \
 	src/apps/calc.c \
@@ -105,6 +106,8 @@ run: all $(DISK_IMAGE)
 	$(QEMU) \
 		-kernel $(KERNEL) \
 		-drive file=$(DISK_IMAGE),format=raw,if=ide,index=0 \
+		-netdev user,id=net0 \
+		-device rtl8139,netdev=net0 \
 		-m 128M \
 		-no-reboot \
 		-no-shutdown
