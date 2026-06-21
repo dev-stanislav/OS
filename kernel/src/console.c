@@ -9,6 +9,7 @@
 #include "apps/app.h"
 #include "heap.h"
 #include "net.h"
+#include "process.h"
 
 #define LINE_MAX 40
 #define HISTORY_MAX 16
@@ -79,7 +80,7 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping\nproc:   ps userdemo\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -124,6 +125,8 @@ static void execute_command(char *command) {
         if(count > 2) { if(net_ping_ip(args[2]))vga_write("ping sent; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK);else vga_write("usage: net ping 8.8.8.8\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
         else { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
     }
+    else if (kstrcmp(args[0], "ps") == 0) process_list();
+    else if (kstrcmp(args[0], "userdemo") == 0) process_run_user_demo();
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
     else if (kstrcmp(args[0], "tbf") == 0) { app_set_workdir(current_dir); app_run("tbf",0,0); }
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {

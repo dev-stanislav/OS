@@ -18,6 +18,8 @@ typedef struct {
 } __attribute__((packed)) gdt_pointer_t;
 
 extern void load_gdt(void);
+extern void load_tss(void);
 void gdt_init(void);
+void gdt_set_kernel_stack(uint32_t stack);
 
 #endif
