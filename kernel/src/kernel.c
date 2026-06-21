@@ -5,10 +5,16 @@
 #include "keyboard.h"
 #include "timer.h"
 #include "io.h"
+#include "disk.h"
+#include "heap.h"
+#include "paging.h"
 
 void kernel_main(void) {
     vga_init();
     gdt_init();
+    heap_init();
+    paging_init();
+    disk_init();
     idt_init();
     timer_init();
     keyboard_init();

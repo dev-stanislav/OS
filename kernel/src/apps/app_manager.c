@@ -25,6 +25,12 @@ static const app_package_t packages[] = {
 static uint8_t installed[PACKAGE_COUNT];
 static const app_package_t *active;
 
+static void package_path(char *path, const char *id) {
+    kstrcpy(path, "/apps/", 40);
+    kstrcpy(path + kstrlen(path), id, 40 - kstrlen(path));
+    kstrcpy(path + kstrlen(path), ".pkg", 40 - kstrlen(path));
+}
+
 static int package_index(const char *id) {
     for (uint8_t i=0;i<PACKAGE_COUNT;i++) if (kstrcmp(packages[i].id,id)==0) return i;
     return -1;
@@ -32,7 +38,11 @@ static int package_index(const char *id) {
 
 static void status(const char *message, uint8_t color) { vga_write(message, color, VGA_COLOR_BLACK); vga_write("\n", color, VGA_COLOR_BLACK); }
 
-void app_init(void) { for (uint8_t i=0;i<PACKAGE_COUNT;i++) installed[i]=0; active=0; (void)fs_create("/apps",FS_DIR,fs_root()); }
+void app_init(void) {
+    active=0;
+    (void)fs_create("/apps",FS_DIR,fs_root());
+    for (uint8_t i=0;i<PACKAGE_COUNT;i++) { char path[40]; package_path(path,packages[i].id); installed[i]=fs_resolve(path,fs_root())>=0; }
+}
 
 void app_list(uint8_t installed_only) {
     for (uint8_t i=0;i<PACKAGE_COUNT;i++) if (!installed_only || installed[i]) {
@@ -52,14 +62,14 @@ void app_info(const char *id) {
 
 void app_install(const char *id) {
     int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(installed[index]){status("already installed",VGA_COLOR_LIGHT_BROWN);return;}
-    char path[40]="/apps/"; kstrcpy(path+6,id,sizeof(path)-6); kstrcpy(path+6+kstrlen(id),".pkg",sizeof(path)-6-kstrlen(id));
+    char path[40]; package_path(path,id);
     fs_result_t result=fs_write(path,"MiniPkg metadata",fs_root()); if(result!=FS_OK){status("cannot install package",VGA_COLOR_LIGHT_RED);return;}
     installed[index]=1; status("installed",VGA_COLOR_LIGHT_GREEN);
 }
 
 void app_remove(const char *id) {
     int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(!installed[index]){status("not installed",VGA_COLOR_LIGHT_BROWN);return;}
-    char path[40]="/apps/"; kstrcpy(path+6,id,sizeof(path)-6); kstrcpy(path+6+kstrlen(id),".pkg",sizeof(path)-6-kstrlen(id));
+    char path[40]; package_path(path,id);
     (void)fs_remove(path,fs_root(),0); installed[index]=0; status("removed",VGA_COLOR_LIGHT_GREEN);
 }
 

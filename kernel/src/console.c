@@ -7,6 +7,7 @@
 #include "timer.h"
 #include "vga.h"
 #include "apps/app.h"
+#include "heap.h"
 
 #define LINE_MAX 40
 #define HISTORY_MAX 16
@@ -111,7 +112,7 @@ static void execute_command(char *command) {
     else if (kstrcmp(args[0], "clear") == 0) vga_clear(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "about") == 0 || kstrcmp(args[0], "uname") == 0) vga_write("MiniOS i686 v1 experimental kernel\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "uptime") == 0) { vga_write("uptime: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(timer_ticks() / TIMER_HZ); vga_write(" s\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
-    else if (kstrcmp(args[0], "mem") == 0) { vga_write("RAM FS nodes: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(fs_used_count()); vga_write("/32, file max: 1024 bytes\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "mem") == 0) { vga_write("Disk FS nodes: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(fs_used_count()); vga_write("/32, file max: 1024 bytes\nKernel heap: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(heap_used()); vga_write("/",VGA_COLOR_WHITE,VGA_COLOR_BLACK); print_number(heap_capacity()); vga_write(" bytes\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
         if (kstrcmp(args[1], "list") == 0) app_list(0);

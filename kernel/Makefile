@@ -52,6 +52,9 @@ KERNEL_C := \
 	src/timer.c \
 	src/libk.c \
 	src/fs.c \
+	src/disk.c \
+	src/heap.c \
+	src/paging.c \
 	src/apps/app_manager.c \
 	src/apps/minifetch.c \
 	src/apps/calc.c \
@@ -68,8 +71,9 @@ ALL_OBJ := $(BOOT_OBJ) $(KERNEL_OBJ)
 # Outputs
 KERNEL := $(BUILD_DIR)/kernel
 ISO_FILE := minios.iso
+DISK_IMAGE := minios.img
 
-.PHONY: all clean iso run check help
+.PHONY: all clean distclean iso run check help
 
 all: check $(KERNEL)
 
@@ -92,10 +96,15 @@ $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-run: all
+$(DISK_IMAGE):
+	@echo "Creating persistent disk: $@"
+	dd if=/dev/zero of=$@ bs=1M count=4 status=none
+
+run: all $(DISK_IMAGE)
 	@command -v $(QEMU) >/dev/null 2>&1 || { echo "ERROR: qemu-system-i386 not found"; exit 1; }
 	$(QEMU) \
 		-kernel $(KERNEL) \
+		-drive file=$(DISK_IMAGE),format=raw,if=ide,index=0 \
 		-m 128M \
 		-no-reboot \
 		-no-shutdown
@@ -117,9 +126,13 @@ iso: all
 clean:
 	rm -rf $(BUILD_DIR) $(ISO_DIR) $(ISO_FILE)
 
+distclean: clean
+	rm -f $(DISK_IMAGE)
+
 help:
 	@echo "Available commands:"
 	@echo "  make        Build kernel"
 	@echo "  make run    Build and run in QEMU"
 	@echo "  make iso    Build GRUB ISO"
 	@echo "  make clean  Delete generated files"
+	@echo "  make distclean  Also delete the persistent disk"
