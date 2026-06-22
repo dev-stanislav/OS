@@ -7,6 +7,7 @@
 static uint8_t ready;
 static uint32_t days_since_year0;
 static uint32_t seconds_of_day;
+static int16_t timezone_minutes;
 
 static uint8_t cmos_read(uint8_t reg) {
     outb(CMOS_INDEX, (uint8_t)(0x80 | reg));
@@ -34,6 +35,7 @@ static uint32_t days_before_month(uint32_t year, uint8_t month) {
 
 void rtc_init(void) {
     ready = 0;
+    timezone_minutes = 0;
     for (uint32_t wait = 0; wait < 1000000; wait++) if ((cmos_read(0x0A) & 0x80) == 0) break;
     uint8_t second = cmos_read(0x00);
     uint8_t minute = cmos_read(0x02);
@@ -63,3 +65,5 @@ void rtc_init(void) {
 uint8_t rtc_ready(void) { return ready; }
 uint32_t rtc_days_since_year0(void) { return days_since_year0; }
 uint32_t rtc_seconds_of_day(void) { return seconds_of_day; }
+void rtc_set_timezone_minutes(int16_t minutes) { timezone_minutes = minutes; }
+int16_t rtc_timezone_minutes(void) { return timezone_minutes; }

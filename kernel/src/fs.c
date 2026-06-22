@@ -40,6 +40,15 @@ static int find_child(int parent, const char *name) {
         if (nodes[index].used && nodes[index].parent == parent && kstrcmp(nodes[index].name, name) == 0) return index;
     return -1;
 }
+
+static int is_descendant(int node, int parent) {
+    while (node > 0) {
+        if (node == parent) return 1;
+        node = nodes[node].parent;
+    }
+    return parent == 0;
+}
+
 void fs_set_actor(uint8_t uid,uint8_t root){actor_uid=uid;actor_root=root;}
 uint8_t fs_can_read(int index){const fs_node_t*n=fs_node(index);return n&&(actor_root||n->owner==actor_uid||(n->mode&004));}
 uint8_t fs_can_write(int index){const fs_node_t*n=fs_node(index);return n&&(actor_root||(n->owner==actor_uid&&(n->mode&0200))||(n->owner!=actor_uid&&(n->mode&0002)));}
@@ -125,6 +134,91 @@ fs_result_t fs_write(const char *path, const char *text, int current) {
     size_t length = kstrlen(text);
     if (length > FS_FILE_MAX) return FS_TOO_LARGE;
     kstrcpy(nodes[index].data, text, sizeof(nodes[index].data)); nodes[index].size = (uint16_t)length;
+    fs_sync();
+    return FS_OK;
+}
+
+fs_result_t fs_append(const char *path, const char *text, int current) {
+    int index = fs_resolve(path, current);
+    if (index < 0) { fs_result_t created = fs_create(path, FS_FILE, current); if (created != FS_OK) return created; index = fs_resolve(path, current); }
+    if (nodes[index].type != FS_FILE) return FS_INVALID;
+    if(!fs_can_write(index))return FS_INVALID;
+    size_t current_length = nodes[index].size;
+    size_t added = kstrlen(text);
+    if (current_length + added > FS_FILE_MAX) return FS_TOO_LARGE;
+    for (size_t i=0;i<=added;i++) nodes[index].data[current_length+i] = text[i];
+    nodes[index].size = (uint16_t)(current_length + added);
+    fs_sync();
+    return FS_OK;
+}
+
+fs_result_t fs_copy(const char *source, const char *destination, int current) {
+    int source_index = fs_resolve(source, current);
+    if (source_index < 0) return FS_NOT_FOUND;
+    if (nodes[source_index].type != FS_FILE) return FS_INVALID;
+    if (!fs_can_read(source_index)) return FS_INVALID;
+
+    int target_index = fs_resolve(destination, current);
+    int parent;
+    char name[FS_NAME_MAX + 1];
+    if (target_index >= 0 && nodes[target_index].type == FS_DIR) {
+        parent = target_index;
+        kstrcpy(name, nodes[source_index].name, sizeof(name));
+        target_index = find_child(parent, name);
+    } else if (target_index >= 0) {
+        parent = nodes[target_index].parent;
+        kstrcpy(name, nodes[target_index].name, sizeof(name));
+    } else {
+        fs_result_t split = split_parent(destination, current, &parent, name);
+        if (split != FS_OK) return split;
+        target_index = find_child(parent, name);
+    }
+    if (!fs_can_write(parent)) return FS_INVALID;
+
+    if (target_index >= 0) {
+        if (nodes[target_index].type != FS_FILE) return FS_INVALID;
+        if (!fs_can_write(target_index)) return FS_INVALID;
+        kstrcpy(nodes[target_index].data, nodes[source_index].data, sizeof(nodes[target_index].data));
+        nodes[target_index].size = nodes[source_index].size;
+        fs_sync();
+        return FS_OK;
+    }
+
+    for (int index = 1; index < FS_MAX_NODES; index++) if (!nodes[index].used) {
+        nodes[index].used = 1; nodes[index].type = FS_FILE; nodes[index].parent = (int8_t)parent;
+        nodes[index].owner = actor_uid; nodes[index].mode = nodes[source_index].mode;
+        nodes[index].size = nodes[source_index].size;
+        kstrcpy(nodes[index].name, name, sizeof(nodes[index].name));
+        kstrcpy(nodes[index].data, nodes[source_index].data, sizeof(nodes[index].data));
+        fs_sync();
+        return FS_OK;
+    }
+    return FS_FULL;
+}
+
+fs_result_t fs_move(const char *source, const char *destination, int current) {
+    int source_index = fs_resolve(source, current);
+    if (source_index <= 0) return FS_NOT_FOUND;
+    if (!fs_can_write(nodes[source_index].parent)) return FS_INVALID;
+
+    int target_index = fs_resolve(destination, current);
+    int parent;
+    char name[FS_NAME_MAX + 1];
+    if (target_index >= 0 && nodes[target_index].type == FS_DIR) {
+        parent = target_index;
+        kstrcpy(name, nodes[source_index].name, sizeof(name));
+    } else if (target_index >= 0) return FS_EXISTS;
+    else {
+        fs_result_t split = split_parent(destination, current, &parent, name);
+        if (split != FS_OK) return split;
+    }
+    if (!fs_can_write(parent)) return FS_INVALID;
+    if (nodes[source_index].type == FS_DIR && is_descendant(parent, source_index)) return FS_INVALID;
+
+    int existing = find_child(parent, name);
+    if (existing >= 0 && existing != source_index) return FS_EXISTS;
+    nodes[source_index].parent = (int8_t)parent;
+    kstrcpy(nodes[source_index].name, name, sizeof(nodes[source_index].name));
     fs_sync();
     return FS_OK;
 }
