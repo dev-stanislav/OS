@@ -10,12 +10,14 @@
 #include "paging.h"
 #include "net.h"
 #include "mouse.h"
+#include "rtc.h"
 
 void kernel_main(void) {
     vga_init();
     gdt_init();
     heap_init();
     paging_init();
+    rtc_init();
     disk_init();
     net_init();
     idt_init();

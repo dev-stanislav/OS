@@ -22,7 +22,16 @@ CFLAGS := --target=i686-none-elf \
           -mno-sse2 \
           -Wall \
           -Wextra \
-          -I./src
+          -DBR_USE_URANDOM=0 \
+          -DBR_USE_WIN32_RAND=0 \
+          -DBR_USE_UNIX_TIME=0 \
+          -DBR_USE_WIN32_TIME=0 \
+          -DBR_RDRAND=0 \
+          -DBR_AES_X86NI=0 \
+          -DBR_SSE2=0 \
+          -I./src \
+          -I./third_party/bearssl/inc \
+          -I./third_party/bearssl/src
 
 ASFLAGS := -f elf32
 LDFLAGS := -m elf_i386 \
@@ -53,10 +62,12 @@ KERNEL_C := \
 	src/console.c \
 	src/timer.c \
 	src/libk.c \
+	src/bearssl_os.c \
 	src/fs.c \
 	src/disk.c \
 	src/heap.c \
 	src/paging.c \
+	src/rtc.c \
 	src/net.c \
 	src/users.c \
 	src/apps/app_manager.c \
@@ -72,9 +83,23 @@ KERNEL_C := \
 	src/apps/terminal.c \
 	src/apps/sproot.c
 
+BEARSSL_C := \
+	$(wildcard third_party/bearssl/src/aead/*.c) \
+	$(wildcard third_party/bearssl/src/codec/*.c) \
+	$(wildcard third_party/bearssl/src/ec/*.c) \
+	$(wildcard third_party/bearssl/src/hash/*.c) \
+	$(wildcard third_party/bearssl/src/int/*.c) \
+	$(wildcard third_party/bearssl/src/kdf/*.c) \
+	$(wildcard third_party/bearssl/src/mac/*.c) \
+	$(filter-out third_party/bearssl/src/rand/sysrng.c,$(wildcard third_party/bearssl/src/rand/*.c)) \
+	$(wildcard third_party/bearssl/src/rsa/*.c) \
+	$(wildcard third_party/bearssl/src/ssl/*.c) \
+	$(wildcard third_party/bearssl/src/symcipher/*.c) \
+	$(wildcard third_party/bearssl/src/x509/*.c)
+
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))
-KERNEL_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C))
+KERNEL_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C) $(BEARSSL_C))
 ALL_OBJ := $(BOOT_OBJ) $(KERNEL_OBJ)
 
 # Outputs

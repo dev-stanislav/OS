@@ -6,6 +6,8 @@
 
 void *kmemset(void *destination, int value, size_t count);
 void *kmemcpy(void *destination, const void *source, size_t count);
+void *kmemmove(void *destination, const void *source, size_t count);
+int kmemcmp(const void *left, const void *right, size_t count);
 size_t kstrlen(const char *text);
 int kstrcmp(const char *left, const char *right);
 void kstrcpy(char *destination, const char *source, size_t capacity);

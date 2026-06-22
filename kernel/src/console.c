@@ -11,16 +11,18 @@
 #include "net.h"
 #include "users.h"
 
-#define LINE_MAX 40
+#define LINE_MAX 160
 #define HISTORY_MAX 16
 
 static char line[LINE_MAX + 1];
-static uint8_t line_length, line_cursor;
+static uint16_t line_length, line_cursor;
 static char history[HISTORY_MAX][LINE_MAX + 1];
 static uint8_t history_count, history_view;
 static int current_dir;
 static size_t input_row, input_col;
 static uint8_t game_active, secret, games_played;
+static uint8_t fetch_active, fetch_save;
+static char fetch_save_path[80];
 
 static void print_number(uint32_t value) { char text[16]; kitoa(value, text, 10); vga_write(text, VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
 
@@ -35,9 +37,12 @@ static void print_result(fs_result_t result) {
 }
 
 static void redraw_line(void) {
-    for (size_t i = 0; i < LINE_MAX; i++) vga_put_at(input_row, input_col + i, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    for (uint8_t i = 0; i < line_length; i++) vga_put_at(input_row, input_col + i, line[i], VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    vga_set_position(input_row, input_col + line_cursor);
+    size_t visible = input_col < VGA_WIDTH ? VGA_WIDTH - input_col : 0;
+    uint16_t start = 0;
+    if (visible && line_cursor >= visible) start = (uint16_t)(line_cursor - visible + 1);
+    for (size_t i = 0; i < visible; i++) vga_put_at(input_row, input_col + i, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    for (size_t i = 0; i < visible && start + i < line_length; i++) vga_put_at(input_row, input_col + i, line[start + i], VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_set_position(input_row, input_col + (line_cursor >= start ? line_cursor - start : 0));
 }
 
 static void prompt(void) {
@@ -81,7 +86,7 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping | fetch URL [file]\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -107,6 +112,46 @@ static void execute_game(char **args, uint8_t count) {
     } else vga_write("guess 1-9 or type exit\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
 }
 
+static void command_fetch(const char *url, const char *path) {
+    if (fetch_active) { vga_write("fetch already running\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK); return; }
+    fetch_save = path && *path;
+    if (fetch_save) kstrcpy(fetch_save_path, path, sizeof(fetch_save_path));
+    else fetch_save_path[0] = '\0';
+    if (!net_fetch_start(url)) {
+        vga_write("fetch: ", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        vga_write(net_fetch_error(), VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        vga_write("\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        return;
+    }
+    fetch_active = 1;
+    vga_write("fetch started\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+}
+
+static void finish_fetch(void) {
+    net_fetch_status_t status = net_fetch_status();
+    if (status == NET_FETCH_DONE) {
+        const char *body = net_fetch_body();
+        uint16_t length = net_fetch_body_length();
+        if (fetch_save) {
+            if (length > FS_FILE_MAX) vga_write("fetch: response too large for file\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+            else {
+                fs_result_t result = fs_write(fetch_save_path, body, current_dir);
+                if (result == FS_OK) vga_write("fetch saved\n", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+                else print_result(result);
+            }
+        } else {
+            vga_write(body, VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+            if (!length || body[length - 1] != '\n') vga_write("\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+        }
+    } else if (status == NET_FETCH_ERROR) {
+        vga_write("fetch: ", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        vga_write(net_fetch_error(), VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        vga_write("\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+    }
+    fetch_active = 0;
+    prompt();
+}
+
 static void execute_command(char *command) {
     char *args[8]; uint8_t count = parse_args(command, args, 8);
     if (!count) return;
@@ -126,6 +171,7 @@ static void execute_command(char *command) {
         if(count > 2) { if(net_ping_ip(args[2]))vga_write("ping sent; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK);else vga_write("usage: net ping 8.8.8.8\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
         else { net_ping_gateway(); vga_write("ping sent to 10.0.2.2; use net info\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); }
     }
+    else if (kstrcmp(args[0], "fetch") == 0 && count > 1) command_fetch(args[1], count > 2 ? args[2] : 0);
     else if (kstrcmp(args[0], "whoami") == 0) { vga_write(users_current_name(),VGA_COLOR_LIGHT_GREEN,VGA_COLOR_BLACK);vga_write(" (",VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write(users_current_role(),VGA_COLOR_LIGHT_BROWN,VGA_COLOR_BLACK);vga_write(")\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "user") == 0 && count > 1) {
         if(kstrcmp(args[1],"list")==0) users_list();
@@ -166,6 +212,14 @@ void console_init(void) { fs_init(); users_init(); current_dir=fs_resolve(users_
 void console_update(void) {
     net_poll();
     uint16_t key = keyboard_pop_event();
+    if (fetch_active) {
+        if (key == KEY_INTERRUPT) {
+            net_fetch_cancel();
+            vga_write("^C\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        } else net_fetch_poll();
+        if (net_fetch_status() != NET_FETCH_BUSY) finish_fetch();
+        return;
+    }
     if (app_is_active()) {
         app_handle_tick(timer_ticks());
         if (key) app_handle_key(key);
@@ -183,10 +237,10 @@ void console_update(void) {
     else if (key == KEY_RIGHT && line_cursor < line_length) { line_cursor++; redraw_line(); }
     else if (key == KEY_HOME) { line_cursor=0; redraw_line(); }
     else if (key == KEY_END) { line_cursor=line_length; redraw_line(); }
-    else if (key == KEY_DELETE && line_cursor < line_length) { for(uint8_t i=line_cursor;i<line_length;i++)line[i]=line[i+1];line_length--;redraw_line(); }
-    else if (key == KEY_UP && history_count && history_view) { history_view--;kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint8_t)kstrlen(line);redraw_line(); }
-    else if (key == KEY_DOWN && history_view < history_count) { history_view++;if(history_view==history_count)line[0]='\0';else kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint8_t)kstrlen(line);redraw_line(); }
-    else if (key == '\b' && line_cursor) { for(uint8_t i=line_cursor-1;i<line_length;i++)line[i]=line[i+1];line_cursor--;line_length--;redraw_line(); }
-    else if (key == '\n') { vga_set_position(input_row,input_col+line_length);vga_newline();line[line_length]='\0';add_history(line);execute_command(line);if(!app_is_active())prompt(); }
-    else if (key < 128 && line_length < LINE_MAX) { for(uint8_t i=line_length;i>line_cursor;i--)line[i]=line[i-1];line[line_cursor++]=(char)key;line_length++;line[line_length]='\0';redraw_line(); }
+    else if (key == KEY_DELETE && line_cursor < line_length) { for(uint16_t i=line_cursor;i<line_length;i++)line[i]=line[i+1];line_length--;redraw_line(); }
+    else if (key == KEY_UP && history_count && history_view) { history_view--;kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint16_t)kstrlen(line);redraw_line(); }
+    else if (key == KEY_DOWN && history_view < history_count) { history_view++;if(history_view==history_count)line[0]='\0';else kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint16_t)kstrlen(line);redraw_line(); }
+    else if (key == '\b' && line_cursor) { for(uint16_t i=(uint16_t)(line_cursor-1);i<line_length;i++)line[i]=line[i+1];line_cursor--;line_length--;redraw_line(); }
+    else if (key == '\n') { vga_set_position(input_row,input_col+line_length);vga_newline();line[line_length]='\0';add_history(line);execute_command(line);if(!app_is_active()&&!fetch_active)prompt(); }
+    else if (key < 128 && line_length < LINE_MAX) { for(uint16_t i=line_length;i>line_cursor;i--)line[i]=line[i-1];line[line_cursor++]=(char)key;line_length++;line[line_length]='\0';redraw_line(); }
 }

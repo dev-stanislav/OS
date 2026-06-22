@@ -18,11 +18,42 @@ void *kmemcpy(void *destination, const void *source, size_t count) {
 
 void *memcpy(void *destination, const void *source, size_t count) { return kmemcpy(destination, source, count); }
 
+void *kmemmove(void *destination, const void *source, size_t count) {
+    uint8_t *out = (uint8_t *)destination;
+    const uint8_t *in = (const uint8_t *)source;
+    if (out == in || count == 0) return destination;
+    if (out < in) {
+        while (count--) *out++ = *in++;
+    } else {
+        out += count;
+        in += count;
+        while (count--) *--out = *--in;
+    }
+    return destination;
+}
+
+void *memmove(void *destination, const void *source, size_t count) { return kmemmove(destination, source, count); }
+
+int kmemcmp(const void *left, const void *right, size_t count) {
+    const uint8_t *a = (const uint8_t *)left;
+    const uint8_t *b = (const uint8_t *)right;
+    while (count--) {
+        if (*a != *b) return (int)*a - (int)*b;
+        a++;
+        b++;
+    }
+    return 0;
+}
+
+int memcmp(const void *left, const void *right, size_t count) { return kmemcmp(left, right, count); }
+
 size_t kstrlen(const char *text) {
     size_t length = 0;
     while (text && text[length]) length++;
     return length;
 }
+
+size_t strlen(const char *text) { return kstrlen(text); }
 
 int kstrcmp(const char *left, const char *right) {
     while (*left && *left == *right) { left++; right++; }
