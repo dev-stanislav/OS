@@ -746,7 +746,9 @@ static void tls_pump(void) {
         unsigned state = br_ssl_engine_current_state(&tls_client.eng);
         uint8_t progress = 0;
         if (state == BR_SSL_CLOSED) {
-            if (br_ssl_engine_last_error(&tls_client.eng) != 0) fetch_error("TLS failed");
+            if (fetch_job.response_length) {
+                if (fetch_parse_response()) fetch_job.state = FETCH_DONE;
+            } else if (br_ssl_engine_last_error(&tls_client.eng) != 0) fetch_error("TLS failed");
             else if (fetch_parse_response()) fetch_job.state = FETCH_DONE;
             return;
         }
@@ -861,6 +863,8 @@ static uint8_t fetch_parse_response(void) {
     fetch_job.response[fetch_job.response_length] = '\0';
     char *body_start = find_text(fetch_job.response, "\r\n\r\n");
     if (!body_start) { fetch_error("bad HTTP response"); return 0; }
+    uint16_t header_len = (uint16_t)((body_start + 4) - fetch_job.response);
+    uint16_t actual_body_len = fetch_job.response_length >= header_len ? (uint16_t)(fetch_job.response_length - header_len) : 0;
     *body_start = '\0';
     body_start += 4;
     if (!text_starts(fetch_job.response, "HTTP/1.")) { fetch_error("bad HTTP status"); return 0; }
@@ -880,12 +884,16 @@ static uint8_t fetch_parse_response(void) {
     }
     if (status < 200 || status >= 300) { fetch_error("HTTP status error"); return 0; }
     char *transfer = find_header(fetch_job.response, "Transfer-Encoding");
-    if (transfer && text_starts_ci(transfer, " chunked")) return fetch_decode_chunked(body_start);
+    if (transfer && text_starts_ci(transfer, " chunked")) {
+        if (!fetch_decode_chunked(body_start)) { fetch_error("bad chunked response"); return 0; }
+        return 1;
+    }
     char *cl = find_header(fetch_job.response, "Content-Length");
-    uint16_t body_len = (uint16_t)kstrlen(body_start);
+    uint16_t body_len = actual_body_len;
     if (cl) {
         uint16_t expected = decimal_parse(cl);
         if (expected > FETCH_MAX_BODY) { fetch_error("response too large"); return 0; }
+        if (actual_body_len < expected) { fetch_error("truncated response"); return 0; }
         body_len = expected;
     }
     if (body_len > FETCH_MAX_BODY) { fetch_error("response too large"); return 0; }
