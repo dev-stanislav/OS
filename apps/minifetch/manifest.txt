@@ -3,3 +3,4 @@ name=MiniFetch
 version=1.0
 command=run minifetch
 description=System information in a neofetch-like view.
+

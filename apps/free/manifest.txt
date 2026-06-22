@@ -1,0 +1,6 @@
+id=free
+name=Free
+version=2.0
+command=run free notes.txt
+description=SPROOT graphical text editor. Ctrl+S saves.
+

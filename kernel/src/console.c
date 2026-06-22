@@ -87,6 +87,7 @@ static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping | fetch URL [file]\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("pkg:    minipkg install ID [url] asks y/n and downloads\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -186,9 +187,9 @@ static void execute_command(char *command) {
         if (kstrcmp(args[1], "list") == 0) app_list(0);
         else if (kstrcmp(args[1], "installed") == 0) app_list(1);
         else if (kstrcmp(args[1], "info") == 0 && count > 2) app_info(args[2]);
-        else if (kstrcmp(args[1], "install") == 0 && count > 2) app_install(args[2]);
+        else if (kstrcmp(args[1], "install") == 0 && count > 2) app_install(args[2], count > 3 ? args[3] : 0);
         else if (kstrcmp(args[1], "remove") == 0 && count > 2) app_remove(args[2]);
-        else vga_write("usage: minipkg list|installed|info|install|remove <id>\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
+        else vga_write("usage: minipkg list|installed|info|install|remove <id> [url]\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
     }
     else if (kstrcmp(args[0], "run") == 0 && count > 1) { app_set_workdir(current_dir); app_run(args[1],args+2,(uint8_t)(count-2)); }
     else if (kstrcmp(args[0], "pwd") == 0) { char path[80]; fs_path(current_dir,path,sizeof(path)); vga_write(path,VGA_COLOR_WHITE,VGA_COLOR_BLACK); vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
@@ -220,6 +221,12 @@ void console_update(void) {
         if (net_fetch_status() != NET_FETCH_BUSY) finish_fetch();
         return;
     }
+    if (app_pkg_busy()) {
+        if (key) app_pkg_handle_key(key);
+        app_pkg_poll();
+        if (!app_pkg_busy()) prompt();
+        return;
+    }
     if (app_is_active()) {
         app_handle_tick(timer_ticks());
         if (key) app_handle_key(key);
@@ -241,6 +248,6 @@ void console_update(void) {
     else if (key == KEY_UP && history_count && history_view) { history_view--;kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint16_t)kstrlen(line);redraw_line(); }
     else if (key == KEY_DOWN && history_view < history_count) { history_view++;if(history_view==history_count)line[0]='\0';else kstrcpy(line,history[history_view],sizeof(line));line_length=line_cursor=(uint16_t)kstrlen(line);redraw_line(); }
     else if (key == '\b' && line_cursor) { for(uint16_t i=(uint16_t)(line_cursor-1);i<line_length;i++)line[i]=line[i+1];line_cursor--;line_length--;redraw_line(); }
-    else if (key == '\n') { vga_set_position(input_row,input_col+line_length);vga_newline();line[line_length]='\0';add_history(line);execute_command(line);if(!app_is_active()&&!fetch_active)prompt(); }
+    else if (key == '\n') { vga_set_position(input_row,input_col+line_length);vga_newline();line[line_length]='\0';add_history(line);execute_command(line);if(!app_is_active()&&!fetch_active&&!app_pkg_busy())prompt(); }
     else if (key < 128 && line_length < LINE_MAX) { for(uint16_t i=line_length;i>line_cursor;i--)line[i]=line[i-1];line[line_cursor++]=(char)key;line_length++;line[line_length]='\0';redraw_line(); }
 }

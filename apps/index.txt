@@ -1,0 +1,18 @@
+MiniOS App Library
+source=https://raw.githubusercontent.com/dev-stanislav/OS/main/apps/
+
+calc 1.0 - Integer calculator.
+clock 1.0 - Live uptime clock.
+files 1.0 - RAM filesystem browser.
+free 2.0 - SPROOT graphical text editor.
+matrix 1.0 - Matrix rain.
+mines 1.0 - 8x8 minesweeper.
+minifetch 1.0 - System information.
+paint 1.0 - Canvas drawing app.
+sproot 1.0 - MiniOS framebuffer desktop.
+tbf 2.0 - SPROOT graphical file manager.
+terminal 1.0 - Graphical command terminal.
+
+Install:
+minipkg install calc
+

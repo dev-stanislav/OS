@@ -3,3 +3,4 @@ name=Matrix
 version=1.0
 command=run matrix
 description=Matrix rain console effect. Press Esc to exit.
+

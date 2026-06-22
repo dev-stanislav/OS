@@ -3,3 +3,4 @@ name=Files
 version=1.0
 command=run files
 description=Interactive RAM filesystem browser. Press Esc to exit.
+

@@ -3,3 +3,4 @@ name=Terminal
 version=1.0
 command=run terminal
 description=Graphical SPROOT command terminal.
+

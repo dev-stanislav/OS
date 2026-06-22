@@ -1,5 +1,0 @@
-id=tbf
-name=TBF (The Best File)
-version=1.0
-command=tbf
-description=Built-in console file manager. No installation required.

@@ -1,0 +1,6 @@
+id=mines
+name=MiniMines
+version=1.0
+command=run mines
+description=8x8 minesweeper. Arrows move, Space opens, F flags.
+

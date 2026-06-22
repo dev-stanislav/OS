@@ -1,0 +1,6 @@
+id=sproot
+name=SPROOT
+version=1.0
+command=sproot
+description=MiniOS framebuffer desktop inspired by classic Windows.
+

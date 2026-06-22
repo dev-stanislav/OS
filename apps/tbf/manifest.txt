@@ -1,0 +1,6 @@
+id=tbf
+name=TBF
+version=2.0
+command=tbf
+description=SPROOT graphical file manager.
+

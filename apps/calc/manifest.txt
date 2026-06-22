@@ -3,3 +3,4 @@ name=Calculator
 version=1.0
 command=run calc 12 * 7
 description=Integer calculator with +, -, * and /.
+

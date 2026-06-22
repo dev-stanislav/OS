@@ -1,4 +1,4 @@
-/* MiniPkg local catalog v1. Included by kernel/src/apps/app_manager.c. */
+/* MiniPkg GitHub app library v1. Included by kernel/src/apps/app_manager.c. */
 PACKAGE(minifetch, "MiniFetch", "1.0", "System information", app_minifetch_start, 0, 0)
 PACKAGE(calc, "Calculator", "1.0", "Integer calculator", app_calc_start, 0, 0)
 PACKAGE(clock, "Clock", "1.0", "Live uptime clock", app_clock_start, app_clock_key, app_clock_tick)
@@ -10,3 +10,4 @@ PACKAGE(tbf, "TBF", "2.0", "SPROOT graphical file manager", app_tbf_start, app_t
 PACKAGE(paint, "Paint", "1.0", "Canvas drawing with the left mouse button", app_paint_start, app_paint_key, app_paint_tick)
 PACKAGE(terminal, "Terminal", "1.0", "Graphical command terminal", app_terminal_start, app_terminal_key, app_terminal_tick)
 PACKAGE(sproot, "SPROOT", "1.0", "MiniOS framebuffer desktop", app_sproot_start, app_sproot_key, app_sproot_tick)
+
