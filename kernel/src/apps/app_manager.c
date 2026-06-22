@@ -170,6 +170,11 @@ void app_remove(const char *id) {
     (void)fs_remove(path,fs_root(),0); installed[index]=0; status("removed",VGA_COLOR_LIGHT_GREEN);
 }
 
+uint8_t app_can_run(const char *id) {
+    int index = package_index(id);
+    return index >= 0 && installed[index];
+}
+
 void app_run(const char *id, char **args, uint8_t count) {
     int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(!installed[index]){status("package is not installed",VGA_COLOR_LIGHT_RED);return;}
     active=&packages[index]; active->start(args,count);

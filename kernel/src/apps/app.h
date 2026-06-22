@@ -22,6 +22,7 @@ void app_list(uint8_t installed_only);
 void app_info(const char *id);
 void app_install(const char *id, const char *url);
 void app_remove(const char *id);
+uint8_t app_can_run(const char *id);
 void app_run(const char *id, char **args, uint8_t count);
 void app_set_workdir(int directory);
 int app_get_workdir(void);

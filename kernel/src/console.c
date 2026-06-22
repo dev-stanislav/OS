@@ -9,6 +9,7 @@
 #include "apps/app.h"
 #include "heap.h"
 #include "net.h"
+#include "proc.h"
 #include "users.h"
 
 #define LINE_MAX 160
@@ -25,6 +26,20 @@ static uint8_t fetch_active, fetch_save;
 static char fetch_save_path[80];
 
 static void print_number(uint32_t value) { char text[16]; kitoa(value, text, 10); vga_write(text, VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
+
+static uint16_t parse_u16(const char *text, uint8_t *ok) {
+    uint32_t value = 0;
+    *ok = 0;
+    if (!text || !*text) return 0;
+    while (*text) {
+        if (*text < '0' || *text > '9') return 0;
+        value = value * 10 + (uint32_t)(*text - '0');
+        if (value > 65535) return 0;
+        text++;
+    }
+    *ok = 1;
+    return (uint16_t)value;
+}
 
 static void print_result(fs_result_t result) {
     if (result == FS_NOT_FOUND) vga_write("not found\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
@@ -86,8 +101,9 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls cd mkdir rmdir touch cat write rm\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping | fetch URL [file]\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping | fetch URL [file]\nproc:   ps jobs kill PID, run APP &\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("pkg:    minipkg install ID [url] asks y/n and downloads\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("bg:     bg APP starts an installed app as a background job\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
 }
 
 static void command_ls(const char *path) {
@@ -153,10 +169,33 @@ static void finish_fetch(void) {
     prompt();
 }
 
+static void command_run_background(const char *id) {
+    if (!app_can_run(id)) { vga_write("package is not installed\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK); return; }
+    uint16_t pid = proc_spawn(id);
+    if (!pid) vga_write("process table full\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+    else {
+        vga_write("[", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+        print_number(pid);
+        vga_write("] ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+        vga_write(id, VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+        vga_write(" started\n", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    }
+}
+
 static void execute_command(char *command) {
     char *args[8]; uint8_t count = parse_args(command, args, 8);
     if (!count) return;
     if (game_active) { execute_game(args, count); return; }
+    uint8_t background = 0;
+    if (count > 0 && kstrcmp(args[count - 1], "&") == 0) {
+        background = 1;
+        count--;
+        if (!count) return;
+    }
+    if (background && kstrcmp(args[0], "run") != 0) {
+        vga_write("background mode supports: run APP &\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        return;
+    }
     if (kstrcmp(args[0], "help") == 0) command_help();
     else if (kstrcmp(args[0], "clear") == 0) vga_clear(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "about") == 0 || kstrcmp(args[0], "uname") == 0) vga_write("MiniOS i686 v1 experimental kernel\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
@@ -191,7 +230,24 @@ static void execute_command(char *command) {
         else if (kstrcmp(args[1], "remove") == 0 && count > 2) app_remove(args[2]);
         else vga_write("usage: minipkg list|installed|info|install|remove <id> [url]\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
     }
-    else if (kstrcmp(args[0], "run") == 0 && count > 1) { app_set_workdir(current_dir); app_run(args[1],args+2,(uint8_t)(count-2)); }
+    else if (kstrcmp(args[0], "ps") == 0 || kstrcmp(args[0], "jobs") == 0) proc_list();
+    else if (kstrcmp(args[0], "kill") == 0 && count > 1) {
+        uint8_t ok;
+        uint16_t pid = parse_u16(args[1], &ok);
+        if (!ok) vga_write("usage: kill PID\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        else {
+            proc_result_t result = proc_kill(pid);
+            if (result == PROC_RESULT_OK) vga_write("process killed\n", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+            else if (result == PROC_RESULT_PROTECTED) vga_write("cannot kill system process\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+            else vga_write("process not found\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
+        }
+    }
+    else if (kstrcmp(args[0], "bg") == 0 && count > 1) command_run_background(args[1]);
+    else if (kstrcmp(args[0], "run") == 0 && count > 1) {
+        if (background) {
+            command_run_background(args[1]);
+        } else { app_set_workdir(current_dir); app_run(args[1],args+2,(uint8_t)(count-2)); }
+    }
     else if (kstrcmp(args[0], "pwd") == 0) { char path[80]; fs_path(current_dir,path,sizeof(path)); vga_write(path,VGA_COLOR_WHITE,VGA_COLOR_BLACK); vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "ls") == 0) command_ls(count > 1 ? args[1] : ".");
     else if (kstrcmp(args[0], "cd") == 0) { int target = fs_resolve(count > 1 ? args[1] : "/", current_dir); const fs_node_t *node = fs_node(target); if (node && node->type == FS_DIR) current_dir = target; else vga_write("directory not found\n",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK); }
@@ -208,10 +264,11 @@ static void execute_command(char *command) {
     else vga_write("unknown command; type help\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
 }
 
-void console_init(void) { fs_init(); users_init(); current_dir=fs_resolve(users_current_home(),fs_root()); app_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
+void console_init(void) { fs_init(); users_init(); current_dir=fs_resolve(users_current_home(),fs_root()); app_init(); proc_init(); vga_write("MiniOS terminal v1 - type help\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK); prompt(); }
 
 void console_update(void) {
     net_poll();
+    proc_poll();
     uint16_t key = keyboard_pop_event();
     if (fetch_active) {
         if (key == KEY_INTERRUPT) {

@@ -69,6 +69,7 @@ KERNEL_C := \
 	src/paging.c \
 	src/rtc.c \
 	src/net.c \
+	src/proc.c \
 	src/users.c \
 	src/apps/app_manager.c \
 	src/apps/minifetch.c \
