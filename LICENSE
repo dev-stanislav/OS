@@ -1,0 +1,142 @@
+SFL — Stanislav Friendly License
+Version 1.0, 2026
+
+Copyright (c) 2026 Stanislav
+GitHub: https://github.com/dev-stanislav
+
+1. PERMISSION
+
+Permission is hereby granted, free of charge, to any person or organization
+obtaining a copy of this software and its associated documentation files
+(the "Software") to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, in source or binary form,
+for private, educational, open-source, or commercial purposes, subject to
+the conditions below.
+
+2. ATTRIBUTION
+
+Redistributions of the Software in source form must retain:
+
+a. the above copyright notice;
+b. this license; and
+c. a reference to the original author:
+
+"Originally developed by Stanislav (GitHub: dev-stanislav)."
+
+Redistributions of the Software in binary form must reproduce the copyright
+notice, this license, and the attribution above in the documentation,
+credits, About page, NOTICE file, or other reasonably accessible materials
+provided with the distribution.
+
+The attribution does not have to be displayed permanently in the main user
+interface, provided that it remains reasonably accessible.
+
+3. MODIFICATIONS
+
+Modified versions may be distributed under this license or under different
+terms, including proprietary terms, provided that:
+
+a. the requirements of Section 2 are followed;
+b. the original author's work is not falsely presented as the work of
+another person; and
+c. modifications are not falsely represented as having been created,
+approved, or endorsed by the original author.
+
+4. NO ENDORSEMENT
+
+The name, username, logo, identity, or reputation of the original author
+may not be used to advertise, endorse, or promote a derived product without
+the author's prior written permission.
+
+Merely providing the attribution required by this license does not imply
+endorsement.
+
+5. ALTERNATIVE AGREEMENTS
+
+Alternative terms may be negotiated directly with the original author.
+
+Such terms may include, without limitation:
+
+a. removal or modification of the attribution requirement;
+b. private or commercial licensing;
+c. additional permissions;
+d. support or development services;
+e. relicensing; or
+f. exceptions to any condition of this license.
+
+An alternative agreement is valid only when confirmed in writing by the
+original author. A written agreement may include a signed document, email,
+or another verifiable written electronic communication.
+
+6. FRIENDLY OPEN-SOURCE REQUEST
+
+You are not required to publish your source code or modifications.
+
+However, if you modify the Software or use it to create another project,
+you are encouraged to publish the modifications or share a link to the
+project with the original author.
+
+The author is interested in seeing how the Software is used and developed
+by others.
+
+This section is a friendly request only and creates no legal obligation.
+
+7. BEER REQUEST
+
+If you meet the original author someday and believe the Software was useful,
+you are encouraged to buy the author a beer, coffee, or another drink of
+the author's choice.
+
+This section is voluntary, is not a condition of this license, and creates
+no debt, payment obligation, or other legal obligation.
+
+8. TERMINATION
+
+The rights granted under this license terminate automatically for any person
+or organization that materially violates its conditions.
+
+After receiving written notice of a violation, the violating party will
+have 30 days to correct the violation.
+
+If the violation is fully corrected within that period, the rights granted
+under this license will be reinstated automatically for the first violation.
+
+For repeated or intentional violations, reinstatement requires written
+permission from the original author.
+
+Continued use, copying, modification, distribution, sublicensing, or sale of
+the Software after termination is not authorized by this license.
+
+9. ENFORCEMENT
+
+The copyright holder retains all rights and remedies available under
+applicable law.
+
+In the event of a violation, the copyright holder may request correction of
+the violation, removal of infringing copies, suspension of distribution,
+or any other remedy available under applicable law.
+
+Nothing in this section guarantees that any particular remedy, monetary
+award, or court decision will be available.
+
+10. CONTRIBUTIONS
+
+Unless a separate written agreement states otherwise, any contribution
+intentionally submitted for inclusion in the Software is provided under
+the terms of this license.
+
+Each contributor represents that they have the right to submit their
+contribution under these terms.
+
+11. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, OR CONTRIBUTORS BE LIABLE
+FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH
+THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+END OF LICENSE
