@@ -35,4 +35,8 @@ static inline void enable_interrupts(void) {
     __asm__ volatile ("sti");
 }
 
+static inline void disable_interrupts(void) {
+    __asm__ volatile ("cli");
+}
+
 #endif
