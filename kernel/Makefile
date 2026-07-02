@@ -5,6 +5,7 @@
 CC := clang
 LD := ld.lld
 AS := nasm
+NM := nm
 QEMU := qemu-system-i386
 GRUB_MKRESCUE := grub-mkrescue
 
@@ -17,6 +18,7 @@ CFLAGS := --target=i686-none-elf \
           -fno-stack-protector \
           -fno-pic \
           -fno-pie \
+          -fno-omit-frame-pointer \
           -mno-mmx \
           -mno-sse \
           -mno-sse2 \
@@ -58,6 +60,14 @@ KERNEL_C := \
 	src/mouse.c \
 	src/gdt.c \
 	src/idt.c \
+	src/irq.c \
+	src/cpu.c \
+	src/panic.c \
+	src/serial.c \
+	src/ksym.c \
+	src/syscall.c \
+	src/apic.c \
+	src/percpu.c \
 	src/keyboard.c \
 	src/console.c \
 	src/timer.c \
@@ -101,7 +111,11 @@ BEARSSL_C := \
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))
 KERNEL_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C) $(BEARSSL_C))
-ALL_OBJ := $(BOOT_OBJ) $(KERNEL_OBJ)
+BASE_OBJ := $(BOOT_OBJ) $(KERNEL_OBJ)
+KSYM_GEN_C := $(BUILD_DIR)/ksym.generated.c
+KSYM_GEN_OBJ := $(BUILD_DIR)/ksym.generated.o
+STAGE_KERNEL := $(BUILD_DIR)/kernel.symstage
+ALL_OBJ := $(BASE_OBJ) $(KSYM_GEN_OBJ)
 
 # Outputs
 KERNEL := $(BUILD_DIR)/kernel
@@ -116,12 +130,26 @@ check:
 	@command -v $(CC) >/dev/null 2>&1 || { echo "ERROR: clang not found"; exit 1; }
 	@command -v $(LD) >/dev/null 2>&1 || { echo "ERROR: ld.lld not found"; exit 1; }
 	@command -v $(AS) >/dev/null 2>&1 || { echo "ERROR: nasm not found"; exit 1; }
+	@command -v $(NM) >/dev/null 2>&1 || { echo "ERROR: nm not found"; exit 1; }
 
 $(KERNEL): $(ALL_OBJ) boot/linker.ld
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $@ $(ALL_OBJ)
 	@echo
 	@echo "Kernel built: $(KERNEL)"
+
+$(STAGE_KERNEL): $(BASE_OBJ) boot/linker.ld
+	@mkdir -p $(dir $@)
+	$(LD) $(LDFLAGS) -o $@ $(BASE_OBJ)
+
+$(KSYM_GEN_C): $(STAGE_KERNEL)
+	@mkdir -p $(dir $@)
+	@printf '#include "ksym.h"\n\nconst ksym_entry_t ksym_table[] = {\n' > $@
+	@$(NM) -n $< | awk '/^[0-9a-fA-F]+ [Tt] / { printf "    {0x%s, \"%s\"},\n", $$1, $$3 }' >> $@
+	@printf '};\nconst uint32_t ksym_table_count = sizeof(ksym_table) / sizeof(ksym_table[0]);\n' >> $@
+
+$(KSYM_GEN_OBJ): $(KSYM_GEN_C)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: %.asm
 	@mkdir -p $(dir $@)

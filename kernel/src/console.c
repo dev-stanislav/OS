@@ -1,9 +1,13 @@
 #include <stdint.h>
+#include "apic.h"
 #include "console.h"
+#include "cpu.h"
 #include "fs.h"
 #include "io.h"
+#include "irq.h"
 #include "keyboard.h"
 #include "libk.h"
+#include "panic.h"
 #include "rtc.h"
 #include "timer.h"
 #include "vga.h"
@@ -139,6 +143,17 @@ static void print_mode(uint16_t mode) {
     vga_putchar((char)('0' + (mode & 7)), VGA_COLOR_WHITE, VGA_COLOR_BLACK);
 }
 
+static void print_hex(uint32_t value) {
+    char text[2];
+    vga_write("0x", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    for (int shift=28;shift>=0;shift-=4) {
+        uint8_t digit = (uint8_t)((value >> shift) & 0x0F);
+        text[0] = (char)(digit < 10 ? '0' + digit : 'A' + digit - 10);
+        text[1] = '\0';
+        vga_write(text, VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    }
+}
+
 static void print_result(fs_result_t result) {
     if (result == FS_NOT_FOUND) vga_write("not found\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
     else if (result == FS_EXISTS) vga_write("already exists\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
@@ -200,9 +215,76 @@ static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot, system time\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls [-l] cd mkdir rmdir touch cat write append cp mv rm stat df\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("apps:   minipkg run minifetch game\nnet:    net info | net ping | fetch URL [file]\nproc:   ps jobs kill PID, run APP &\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("debug:  debug cpu | irq | crash div0|gpf|pf|panic\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("time:   system set utc +03:00\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("pkg:    minipkg install ID [url] asks y/n and downloads\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("bg:     bg APP starts an installed app as a background job\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+}
+
+static void print_feature(const char *name, uint8_t enabled) {
+    vga_write(name, enabled ? VGA_COLOR_LIGHT_GREEN : VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+    vga_write(enabled ? " " : "- ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+}
+
+static void command_debug_cpu(void) {
+    const cpu_info_t *info = cpu_info();
+    vga_write("CPU: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write(info->vendor, VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write(" family ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(info->family);
+    vga_write(" model ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(info->model);
+    vga_write(" stepping ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(info->stepping);
+    vga_write("\nFeatures: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    print_feature("FPU", cpu_has(CPU_FEATURE_FPU));
+    print_feature("TSC", cpu_has(CPU_FEATURE_TSC));
+    print_feature("MSR", cpu_has(CPU_FEATURE_MSR));
+    print_feature("PAE", cpu_has(CPU_FEATURE_PAE));
+    print_feature("NX", cpu_has(CPU_FEATURE_NX));
+    print_feature("APIC", cpu_has(CPU_FEATURE_APIC));
+    print_feature("SEP", cpu_has(CPU_FEATURE_SEP));
+    print_feature("SSE", cpu_has(CPU_FEATURE_SSE));
+    print_feature("FXSR", cpu_has(CPU_FEATURE_FXSR));
+    vga_write("\nFeature mask: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    print_hex(info->features);
+    vga_write("\nAPIC runtime: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    vga_write(apic_available() ? "available\n" : "not available\n", apic_available() ? VGA_COLOR_LIGHT_GREEN : VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
+}
+
+static void command_debug_irq(void) {
+    vga_write("IRQ  MASK COUNT SPURIOUS\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    for (uint8_t irq=0;irq<16;irq++) {
+        print_number(irq);
+        if (irq < 10) vga_write("    ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); else vga_write("   ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+        vga_write(irq_is_masked(irq) ? "yes  " : "no   ", irq_is_masked(irq) ? VGA_COLOR_LIGHT_BROWN : VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+        print_number(irq_count(irq));
+        vga_write("     ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+        print_number(irq_spurious_count(irq));
+        vga_write("\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    }
+}
+
+static void debug_crash_div0(void) {
+    volatile uint32_t zero = 0;
+    volatile uint32_t value = 1 / zero;
+    (void)value;
+}
+
+static void debug_crash_gpf(void) {
+    __asm__ volatile ("movw $0x1234, %%ax; movw %%ax, %%ds" ::: "ax");
+}
+
+static void debug_crash_pf(void) {
+    volatile uint32_t *bad = (uint32_t*)0xFFFFFFFFu;
+    *bad = 0xBADCAFEu;
+}
+
+static void command_debug(char **args, uint8_t count) {
+    if (count > 1 && kstrcmp(args[1], "cpu") == 0) command_debug_cpu();
+    else if (count > 1 && kstrcmp(args[1], "irq") == 0) command_debug_irq();
+    else if (count > 2 && kstrcmp(args[1], "crash") == 0 && kstrcmp(args[2], "div0") == 0) debug_crash_div0();
+    else if (count > 2 && kstrcmp(args[1], "crash") == 0 && kstrcmp(args[2], "gpf") == 0) debug_crash_gpf();
+    else if (count > 2 && kstrcmp(args[1], "crash") == 0 && kstrcmp(args[2], "pf") == 0) debug_crash_pf();
+    else if (count > 2 && kstrcmp(args[1], "crash") == 0 && kstrcmp(args[2], "panic") == 0) panic("debug panic", 0);
+    else vga_write("usage: debug cpu | irq | crash div0|gpf|pf|panic\n", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK);
 }
 
 static void load_timezone_config(void) {
@@ -397,6 +479,7 @@ static void execute_command(char *command) {
     else if (kstrcmp(args[0], "clear") == 0) vga_clear(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "about") == 0 || kstrcmp(args[0], "uname") == 0) vga_write("MiniOS i686 v1 experimental kernel\n", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
     else if (kstrcmp(args[0], "uptime") == 0) { vga_write("uptime: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(timer_ticks() / TIMER_HZ); vga_write(" s\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK); }
+    else if (kstrcmp(args[0], "debug") == 0) command_debug(args, count);
     else if (kstrcmp(args[0], "system") == 0) command_system(args, count);
     else if (kstrcmp(args[0], "mem") == 0) { vga_write("Disk FS nodes: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(fs_used_count()); vga_write("/32\nDisk FS data: ",VGA_COLOR_WHITE,VGA_COLOR_BLACK);print_number(fs_used_bytes());vga_write("/",VGA_COLOR_WHITE,VGA_COLOR_BLACK);print_number(fs_capacity_bytes());vga_write(" bytes (image: 4 MiB)\nKernel heap: ", VGA_COLOR_WHITE, VGA_COLOR_BLACK); print_number(heap_used()); vga_write("/",VGA_COLOR_WHITE,VGA_COLOR_BLACK); print_number(heap_capacity()); vga_write(" bytes\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK); }
     else if (kstrcmp(args[0], "net") == 0 && count > 1 && kstrcmp(args[1], "info") == 0) {

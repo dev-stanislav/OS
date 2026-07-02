@@ -1,4 +1,5 @@
 #include "vga.h"
+#include "cpu.h"
 #include "gdt.h"
 #include "idt.h"
 #include "console.h"
@@ -10,17 +11,24 @@
 #include "paging.h"
 #include "net.h"
 #include "mouse.h"
+#include "percpu.h"
 #include "rtc.h"
+#include "serial.h"
+#include "syscall.h"
 
 void kernel_main(void) {
+    serial_init();
     vga_init();
+    cpu_init();
     gdt_init();
+    percpu_init_bsp();
     heap_init();
     paging_init();
     rtc_init();
     disk_init();
     net_init();
     idt_init();
+    syscall_init();
     timer_init();
     keyboard_init();
     mouse_init();
