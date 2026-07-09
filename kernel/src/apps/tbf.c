@@ -1,20 +1,21 @@
 #include "app.h"
+#include "window.h"
 #include "../fs.h"
 #include "../gfx.h"
 #include "../keyboard.h"
 #include "../libk.h"
 #include "../mouse.h"
 
-#define WIN_X 38
-#define WIN_Y 48
-#define WIN_W 724
-#define WIN_H 500
-#define GRID_X 64
-#define GRID_Y 170
-#define TILE_W 130
-#define TILE_H 76
-#define GRID_COLS 5
-#define GRID_ROWS 4
+#define WIN_X 74
+#define WIN_Y 64
+#define WIN_W 652
+#define WIN_H 470
+#define GRID_X (WIN_X + 30)
+#define GRID_Y (WIN_Y + 126)
+#define TILE_W 148
+#define TILE_H 68
+#define GRID_COLS 4
+#define GRID_ROWS 3
 #define VISIBLE_ITEMS (GRID_COLS * GRID_ROWS)
 #define NO_BUTTON 255
 
@@ -26,13 +27,14 @@ typedef struct {
 } toolbar_button_t;
 
 static const toolbar_button_t buttons[] = {
-    {62, 98, 62, "Back"},
-    {132, 98, 62, "Open"},
-    {202, 98, 110, "New Folder"},
-    {320, 98, 94, "New File"},
-    {422, 98, 82, "Rename"},
+    {WIN_X + 28, WIN_Y + 58, 62, "Back"},
+    {WIN_X + 98, WIN_Y + 58, 62, "Open"},
+    {WIN_X + 168, WIN_Y + 58, 110, "New Folder"},
+    {WIN_X + 286, WIN_Y + 58, 94, "New File"},
+    {WIN_X + 388, WIN_Y + 58, 82, "Rename"},
 };
 
+static const app_window_t window = {WIN_X, WIN_Y, WIN_W, WIN_H, "File Manager"};
 static int directory;
 static int entries[FS_MAX_NODES];
 static uint8_t count;
@@ -44,18 +46,6 @@ static char rename_buffer[FS_NAME_MAX + 1];
 static uint8_t rename_length;
 static const char *notice;
 static uint32_t notice_color;
-
-static uint32_t rgb(uint32_t r, uint32_t g, uint32_t b) {
-    return (r << 16) | (g << 8) | b;
-}
-
-static uint32_t blend(uint32_t a, uint32_t b, uint32_t step, uint32_t max) {
-    int ar = (int)((a >> 16) & 255), ag = (int)((a >> 8) & 255), ab = (int)(a & 255);
-    int br = (int)((b >> 16) & 255), bg = (int)((b >> 8) & 255), bb = (int)(b & 255);
-    return rgb((uint32_t)(ar + (br - ar) * (int)step / (int)max),
-               (uint32_t)(ag + (bg - ag) * (int)step / (int)max),
-               (uint32_t)(ab + (bb - ab) * (int)step / (int)max));
-}
 
 static void append_text(char *out, uint16_t cap, const char *text) {
     size_t length = kstrlen(out);
@@ -118,34 +108,11 @@ static void select_name(const char *name) {
     }
 }
 
-static void backdrop(void) {
-    for (int y = 0; y < GFX_HEIGHT; y++) {
-        uint32_t color = y < 330
-            ? blend(0x000B2238, 0x00273155, (uint32_t)y, 330)
-            : blend(0x00273155, 0x00091320, (uint32_t)(y - 330), 270);
-        gfx_rect(0, y, GFX_WIDTH, 1, color);
-    }
-    gfx_rect(0, 515, GFX_WIDTH, 85, 0x00071314);
-    gfx_rect(0, 512, GFX_WIDTH, 2, 0x0000D6D6);
-    gfx_rect(88, 92, 2, 2, 0x0000D6D6);
-    gfx_rect(168, 58, 2, 2, 0x00F2487A);
-    gfx_rect(640, 86, 2, 2, 0x0000D6D6);
-    gfx_rect(718, 134, 2, 2, 0x00FFFFFF);
-}
-
-static void dot(int cx, int cy, int radius, uint32_t color) {
-    for (int y = -radius; y <= radius; y++) {
-        int yy = y < 0 ? -y : y;
-        int width = radius - (yy * yy) / radius;
-        gfx_rect(cx - width, cy + y, width * 2 + 1, 1, color);
-    }
-}
-
 static void draw_button(uint8_t index, uint8_t active) {
     const toolbar_button_t *button = &buttons[index];
-    gfx_rect(button->x, button->y, button->w, 26, active ? 0x00333A47 : 0x001C2430);
-    gfx_border(button->x, button->y, button->w, 26, active ? 0x0000D6D6 : 0x004B5362);
-    gfx_text_bold(button->x + 10, button->y + 10, button->label, active ? 0x0000D6D6 : 0x00FFFFFF);
+    gfx_rect(button->x, button->y, button->w, 26, active ? 0x00D8E9FF : 0x00EAF1F8);
+    gfx_border(button->x, button->y, button->w, 26, active ? 0x000078FF : 0x00C7D3DF);
+    gfx_text_bold(button->x + 10, button->y + 10, button->label, active ? 0x000078FF : 0x00242A35);
 }
 
 static void folder_icon(int x, int y) {
@@ -187,26 +154,27 @@ static void draw_tile(uint8_t visible_index, uint8_t entry_index) {
     uint8_t active = entry_index == selected;
     char label[21];
 
-    gfx_rect(x, y, TILE_W - 12, TILE_H - 8, active ? 0x00244756 : 0x0018212C);
-    gfx_border(x, y, TILE_W - 12, TILE_H - 8, active ? 0x0000D6D6 : 0x00333A47);
-    if (node->type == FS_DIR) folder_icon(x + 34, y + 8);
-    else file_icon(x + 36, y + 6);
+    gfx_rect(x, y, TILE_W - 14, TILE_H - 8, active ? 0x00D8E9FF : 0x00FFFFFF);
+    gfx_border(x, y, TILE_W - 14, TILE_H - 8, active ? 0x000078FF : 0x00C7D3DF);
+    if (node->type == FS_DIR) folder_icon(x + 40, y + 6);
+    else file_icon(x + 42, y + 4);
     short_name(label, node->name, 18);
-    gfx_text_bold(x + 10, y + 58, label, active ? 0x0000D6D6 : 0x00FFFFFF);
+    gfx_text_bold(x + 10, y + 52, label, active ? 0x000078FF : 0x00242A35);
 }
 
 static void draw_status(void) {
-    gfx_rect(WIN_X + 16, WIN_Y + 452, WIN_W - 32, 34, 0x001C2430);
-    gfx_border(WIN_X + 16, WIN_Y + 452, WIN_W - 32, 34, 0x00333A47);
+    int y = WIN_Y + WIN_H - 48;
+    gfx_rect(WIN_X + 28, y, WIN_W - 56, 30, 0x00EAF1F8);
+    gfx_border(WIN_X + 28, y, WIN_W - 56, 30, 0x00D1DDE8);
     if (rename_active) {
-        gfx_text_bold(WIN_X + 28, WIN_Y + 464, "Rename", 0x00FFFFFF);
-        gfx_rect(WIN_X + 92, WIN_Y + 459, 246, 22, 0x000D121C);
-        gfx_border(WIN_X + 92, WIN_Y + 459, 246, 22, 0x0000D6D6);
-        gfx_text_bold(WIN_X + 102, WIN_Y + 466, rename_buffer, 0x0000D6D6);
-        gfx_text_bold(WIN_X + 354, WIN_Y + 466, "Enter OK  Backspace Edit", 0x00B8C0CC);
+        gfx_text_bold(WIN_X + 42, y + 11, "Rename", 0x00242A35);
+        gfx_rect(WIN_X + 108, y + 5, 230, 20, 0x00FFFFFF);
+        gfx_border(WIN_X + 108, y + 5, 230, 20, 0x000078FF);
+        gfx_text_bold(WIN_X + 118, y + 12, rename_buffer, 0x000078FF);
+        gfx_text_bold(WIN_X + 358, y + 12, "Enter OK  Backspace Edit", 0x00607082);
     } else {
-        gfx_text_bold(WIN_X + 28, WIN_Y + 464, notice ? notice : "Ready", notice_color);
-        gfx_text_bold(WIN_X + 438, WIN_Y + 464, "Enter Open  R Rename  Del Delete", 0x00B8C0CC);
+        gfx_text_bold(WIN_X + 42, y + 11, notice ? notice : "Ready", notice_color);
+        gfx_text_bold(WIN_X + 376, y + 11, "Enter Open  R Rename  Del Delete", 0x00607082);
     }
 }
 
@@ -214,28 +182,18 @@ static void draw(void) {
     char path[80];
     gfx_cursor_hide();
     fs_path(directory, path, sizeof(path));
-    backdrop();
-    gfx_rect(WIN_X, WIN_Y, WIN_W, WIN_H, 0x00131820);
-    gfx_border(WIN_X, WIN_Y, WIN_W, WIN_H, 0x004B5362);
-    gfx_rect(WIN_X, WIN_Y, WIN_W, 36, 0x00242A35);
-    dot(WIN_X + 20, WIN_Y + 18, 6, 0x00F2487A);
-    dot(WIN_X + 40, WIN_Y + 18, 6, 0x00FFCA5C);
-    dot(WIN_X + 60, WIN_Y + 18, 6, 0x0000D6D6);
-    gfx_text_bold(WIN_X + 300, WIN_Y + 15, "File Manager", 0x00FFFFFF);
-    gfx_rect(WIN_X + WIN_W - 34, WIN_Y + 8, 22, 20, 0x00F2487A);
-    gfx_border(WIN_X + WIN_W - 34, WIN_Y + 8, 22, 20, 0x006C1430);
-    gfx_text_bold(WIN_X + WIN_W - 26, WIN_Y + 15, "X", 0x00FFFFFF);
+    app_window_draw(&window);
 
     for (uint8_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++) draw_button(i, 0);
-    gfx_rect(62, 132, 640, 24, 0x000D121C);
-    gfx_border(62, 132, 640, 24, 0x00333A47);
-    gfx_text_bold(72, 141, "Location", 0x00B8C0CC);
-    gfx_text_bold(144, 141, path, 0x0000D6D6);
+    gfx_rect(WIN_X + 28, WIN_Y + 94, WIN_W - 56, 24, 0x00FFFFFF);
+    gfx_border(WIN_X + 28, WIN_Y + 94, WIN_W - 56, 24, 0x00C7D3DF);
+    gfx_text_bold(WIN_X + 38, WIN_Y + 103, "Location", 0x00607082);
+    gfx_text_bold(WIN_X + 110, WIN_Y + 103, path, 0x000078FF);
 
-    gfx_rect(56, 162, 662, 324, 0x000D121C);
-    gfx_border(56, 162, 662, 324, 0x00333A47);
+    gfx_rect(WIN_X + 24, WIN_Y + 120, WIN_W - 48, WIN_H - 178, 0x00FDFEFF);
+    gfx_border(WIN_X + 24, WIN_Y + 120, WIN_W - 48, WIN_H - 178, 0x00D1DDE8);
     if (!count) {
-        gfx_text_bold(326, 318, "Empty Folder", 0x00B8C0CC);
+        gfx_text_bold(WIN_X + 278, WIN_Y + 260, "Empty Folder", 0x00607082);
     } else {
         uint8_t visible = (uint8_t)(count - view_start);
         if (visible > VISIBLE_ITEMS) visible = VISIBLE_ITEMS;
@@ -409,7 +367,7 @@ void app_tbf_tick(uint32_t ticks) {
         int y = mouse_y();
         uint8_t button;
         uint8_t item;
-        if (x >= WIN_X + WIN_W - 34 && x < WIN_X + WIN_W - 12 && y >= WIN_Y + 8 && y < WIN_Y + 28) {
+        if (app_window_close_hit(&window, x, y)) {
             app_run("luma", 0, 0);
             return;
         }

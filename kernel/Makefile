@@ -112,6 +112,7 @@ KERNEL_C := \
 	src/proc.c \
 	src/users.c \
 	src/apps/app_manager.c \
+	src/apps/window.c \
 	src/apps/minifetch.c \
 	src/apps/calc.c \
 	src/apps/clock.c \
