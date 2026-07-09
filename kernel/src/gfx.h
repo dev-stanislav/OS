@@ -11,5 +11,7 @@ void gfx_border(int x,int y,int w,int h,uint32_t color);
 void gfx_bevel(int x,int y,int w,int h,uint8_t raised);
 void gfx_pixel(int x,int y,uint32_t color);
 void gfx_text(int x,int y,const char *text,uint32_t color);
+void gfx_text_bold(int x,int y,const char *text,uint32_t color);
 void gfx_cursor(int x,int y);
+void gfx_cursor_hide(void);
 #endif

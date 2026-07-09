@@ -1,6 +1,5 @@
 id=free
-name=Free
+name=Text Editor
 version=2.0
 command=run free notes.txt
-description=SPROOT graphical text editor. Ctrl+S saves.
-
+description=Minimal Luma text editor. Ctrl+S saves.

@@ -1,6 +1,5 @@
 id=tbf
-name=TBF
+name=Files
 version=2.0
 command=tbf
-description=SPROOT graphical file manager.
-
+description=Minimal Luma file manager.

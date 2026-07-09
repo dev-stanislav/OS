@@ -3,6 +3,7 @@
 # Toolchain: Clang + LLD + NASM
 
 CC := clang
+CXX := clang++
 LD := ld.lld
 AS := nasm
 NM := nm
@@ -19,6 +20,35 @@ CFLAGS := --target=i686-none-elf \
           -fno-pic \
           -fno-pie \
           -fno-omit-frame-pointer \
+          -mno-mmx \
+          -mno-sse \
+          -mno-sse2 \
+          -Wall \
+          -Wextra \
+          -DBR_USE_URANDOM=0 \
+          -DBR_USE_WIN32_RAND=0 \
+          -DBR_USE_UNIX_TIME=0 \
+          -DBR_USE_WIN32_TIME=0 \
+          -DBR_RDRAND=0 \
+          -DBR_AES_X86NI=0 \
+          -DBR_SSE2=0 \
+          -I./src \
+          -I./third_party/bearssl/inc \
+          -I./third_party/bearssl/src
+
+CXXFLAGS := --target=i686-none-elf \
+          -m32 \
+          -std=gnu++20 \
+          -ffreestanding \
+          -fno-builtin \
+          -fno-stack-protector \
+          -fno-pic \
+          -fno-pie \
+          -fno-omit-frame-pointer \
+          -fno-exceptions \
+          -fno-rtti \
+          -fno-threadsafe-statics \
+          -fno-use-cxa-atexit \
           -mno-mmx \
           -mno-sse \
           -mno-sse2 \
@@ -91,8 +121,10 @@ KERNEL_C := \
 	src/apps/free.c \
 	src/apps/tbf.c \
 	src/apps/paint.c \
-	src/apps/terminal.c \
-	src/apps/sproot.c
+	src/apps/terminal.c
+
+KERNEL_CPP := \
+	src/apps/luma.cpp
 
 BEARSSL_C := \
 	$(wildcard third_party/bearssl/src/aead/*.c) \
@@ -110,7 +142,8 @@ BEARSSL_C := \
 
 # Objects
 BOOT_OBJ := $(patsubst %.asm,$(BUILD_DIR)/%.o,$(BOOT_ASM))
-KERNEL_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C) $(BEARSSL_C))
+KERNEL_OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(KERNEL_C) $(BEARSSL_C)) \
+	$(patsubst %.cpp,$(BUILD_DIR)/%.o,$(KERNEL_CPP))
 BASE_OBJ := $(BOOT_OBJ) $(KERNEL_OBJ)
 KSYM_GEN_C := $(BUILD_DIR)/ksym.generated.c
 KSYM_GEN_OBJ := $(BUILD_DIR)/ksym.generated.o
@@ -128,6 +161,7 @@ all: check $(KERNEL)
 
 check:
 	@command -v $(CC) >/dev/null 2>&1 || { echo "ERROR: clang not found"; exit 1; }
+	@command -v $(CXX) >/dev/null 2>&1 || { echo "ERROR: clang++ not found"; exit 1; }
 	@command -v $(LD) >/dev/null 2>&1 || { echo "ERROR: ld.lld not found"; exit 1; }
 	@command -v $(AS) >/dev/null 2>&1 || { echo "ERROR: nasm not found"; exit 1; }
 	@command -v $(NM) >/dev/null 2>&1 || { echo "ERROR: nm not found"; exit 1; }
@@ -158,6 +192,10 @@ $(BUILD_DIR)/%.o: %.asm
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(DISK_IMAGE):
 	@echo "Creating persistent disk: $@"

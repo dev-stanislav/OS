@@ -1,0 +1,5 @@
+id=luma
+name=Luma
+version=1.0
+command=luma
+description=Minimal MiniOS framebuffer desktop.

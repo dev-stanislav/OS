@@ -14,15 +14,15 @@ extern void app_matrix_start(char **args, uint8_t count);
 extern void app_mines_start(char **args, uint8_t count);
 extern void app_free_start(char **args, uint8_t count);
 extern void app_tbf_start(char **args, uint8_t count);
-extern void app_sproot_start(char **args, uint8_t count);
+extern void app_luma_start(char **args, uint8_t count);
 extern void app_clock_key(uint16_t key); extern void app_clock_tick(uint32_t ticks);
 extern void app_files_key(uint16_t key);
 extern void app_matrix_key(uint16_t key); extern void app_matrix_tick(uint32_t ticks);
 extern void app_mines_key(uint16_t key);
 extern void app_free_key(uint16_t key);
 extern void app_tbf_key(uint16_t key);
-extern void app_sproot_key(uint16_t key);
-extern void app_sproot_tick(uint32_t ticks);
+extern void app_luma_key(uint16_t key);
+extern void app_luma_tick(uint32_t ticks);
 extern void app_tbf_tick(uint32_t ticks);
 extern void app_free_tick(uint32_t ticks);
 extern void app_paint_start(char **args, uint8_t count);
@@ -63,13 +63,18 @@ static void package_path(char *path, const char *id) {
     kstrcpy(path + kstrlen(path), ".pkg", 40 - kstrlen(path));
 }
 
+static const char *package_alias(const char *id) {
+    return kstrcmp(id, "sproot") == 0 ? "luma" : id;
+}
+
 static int package_index(const char *id) {
+    id = package_alias(id);
     for (uint8_t i=0;i<PACKAGE_COUNT;i++) if (kstrcmp(packages[i].id,id)==0) return i;
     return -1;
 }
 
 static uint8_t builtin_package(const char *id) {
-    return kstrcmp(id,"tbf")==0||kstrcmp(id,"sproot")==0||kstrcmp(id,"free")==0||kstrcmp(id,"paint")==0||kstrcmp(id,"terminal")==0;
+    return kstrcmp(id,"tbf")==0||kstrcmp(id,"luma")==0||kstrcmp(id,"sproot")==0||kstrcmp(id,"free")==0||kstrcmp(id,"paint")==0||kstrcmp(id,"terminal")==0;
 }
 
 static void package_url(char *url, const char *id) {
@@ -139,7 +144,7 @@ void app_info(const char *id) {
     int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;}
     if(pkg_state!=PKG_IDLE){status("minipkg is busy",VGA_COLOR_LIGHT_BROWN);return;}
     pkg_pending_index=index;
-    package_url(pkg_pending_url,id);
+    package_url(pkg_pending_url,packages[index].id);
     if(!net_fetch_start(pkg_pending_url)) {
         vga_write("minipkg: ",VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
         vga_write(net_fetch_error(),VGA_COLOR_LIGHT_RED,VGA_COLOR_BLACK);
@@ -154,8 +159,8 @@ void app_install(const char *id, const char *url) {
     int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(installed[index]){status("already installed",VGA_COLOR_LIGHT_BROWN);return;} if(pkg_state!=PKG_IDLE){status("minipkg is busy",VGA_COLOR_LIGHT_BROWN);return;}
     const app_package_t *p=&packages[index];
     pkg_pending_index=index;
-    package_path(pkg_pending_path,id);
-    if(url&&*url) kstrcpy(pkg_pending_url,url,sizeof(pkg_pending_url)); else package_url(pkg_pending_url,id);
+    package_path(pkg_pending_path,p->id);
+    if(url&&*url) kstrcpy(pkg_pending_url,url,sizeof(pkg_pending_url)); else package_url(pkg_pending_url,p->id);
     vga_write("MiniPkg install\n",VGA_COLOR_LIGHT_CYAN,VGA_COLOR_BLACK);
     vga_write("package: ",VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write(p->id,VGA_COLOR_LIGHT_GREEN,VGA_COLOR_BLACK);vga_write(" ",VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write(p->version,VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK);
     vga_write("description: ",VGA_COLOR_WHITE,VGA_COLOR_BLACK);vga_write(p->description,VGA_COLOR_LIGHT_GREY,VGA_COLOR_BLACK);vga_write("\n",VGA_COLOR_WHITE,VGA_COLOR_BLACK);
@@ -165,8 +170,8 @@ void app_install(const char *id, const char *url) {
 }
 
 void app_remove(const char *id) {
-    int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(builtin_package(id)){status("built-in app cannot be removed",VGA_COLOR_LIGHT_BROWN);return;} if(!installed[index]){status("not installed",VGA_COLOR_LIGHT_BROWN);return;}
-    char path[40]; package_path(path,id);
+    int index=package_index(id); if(index<0){status("package not found",VGA_COLOR_LIGHT_RED);return;} if(builtin_package(packages[index].id)){status("built-in app cannot be removed",VGA_COLOR_LIGHT_BROWN);return;} if(!installed[index]){status("not installed",VGA_COLOR_LIGHT_BROWN);return;}
+    char path[40]; package_path(path,packages[index].id);
     (void)fs_remove(path,fs_root(),0); installed[index]=0; status("removed",VGA_COLOR_LIGHT_GREEN);
 }
 
