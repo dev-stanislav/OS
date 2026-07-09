@@ -47,6 +47,18 @@ constexpr uint8_t MaxWindows = 8;
 constexpr uint8_t NoWindow = 255;
 constexpr uint8_t TerminalRows = 5;
 constexpr uint8_t TerminalCols = 58;
+constexpr uint8_t PaintCols = 80;
+constexpr uint8_t PaintRows = 40;
+constexpr uint8_t PaintEmpty = 255;
+constexpr uint8_t PaintColorCount = 5;
+
+constexpr uint32_t PaintPalette[PaintColorCount] = {
+    0x00000000,
+    0x00FF3B30,
+    0x000078FF,
+    0x0000A86B,
+    0x00FFCC00,
+};
 
 struct DesktopWindow {
     uint8_t type;
@@ -59,8 +71,13 @@ struct DesktopWindow {
     int directory;
     uint8_t selected;
     uint8_t line_len;
+    uint8_t paint_color;
+    uint8_t painting;
+    int paint_last_col;
+    int paint_last_row;
     char line[48];
     char output[TerminalRows][TerminalCols];
+    uint8_t paint[PaintRows][PaintCols];
 };
 
 uint8_t menu;
@@ -317,6 +334,12 @@ void terminal_print(DesktopWindow &window, const char *text) {
     kstrcpy(window.output[TerminalRows - 1], text, TerminalCols);
 }
 
+void paint_clear(DesktopWindow &window) {
+    for (uint8_t row = 0; row < PaintRows; row++) {
+        for (uint8_t col = 0; col < PaintCols; col++) window.paint[row][col] = PaintEmpty;
+    }
+}
+
 void window_defaults(DesktopWindow &window, uint8_t type) {
     int offset = static_cast<int>(window_count) * 22;
     window.type = type;
@@ -326,8 +349,13 @@ void window_defaults(DesktopWindow &window, uint8_t type) {
     window.directory = app_get_workdir();
     window.selected = 0;
     window.line_len = 0;
+    window.paint_color = 0;
+    window.painting = 0;
+    window.paint_last_col = 0;
+    window.paint_last_row = 0;
     window.line[0] = '\0';
     terminal_clear(window);
+    paint_clear(window);
     if (type == 0) { window.w = 480; window.h = 330; }
     else if (type == 1) { window.w = 438; window.h = 306; }
     else if (type == 2) { window.w = 404; window.h = 318; }
@@ -556,14 +584,38 @@ void draw_editor_window(const DesktopWindow &window) {
     gfx_text(window.x + 30, window.y + 114, "Open Terminal, Files and Settings together.", 0x00242A35);
 }
 
+int paint_canvas_x(const DesktopWindow &window) { return window.x + 18; }
+int paint_canvas_y(const DesktopWindow &window) { return window.y + 48; }
+int paint_canvas_w(const DesktopWindow &window) { return window.w - 36; }
+int paint_canvas_h(const DesktopWindow &window) { return window.h - 104; }
+int paint_swatch_y(const DesktopWindow &window) { return window.y + window.h - 44; }
+
 void draw_paint_window(const DesktopWindow &window) {
-    gfx_rect(window.x + 18, window.y + 48, window.w - 36, window.h - 104, 0x00FFFFFF);
-    gfx_border(window.x + 18, window.y + 48, window.w - 36, window.h - 104, 0x00AEB8CA);
-    gfx_rect(window.x + 36, window.y + window.h - 44, 28, 18, 0x00000000);
-    gfx_rect(window.x + 76, window.y + window.h - 44, 28, 18, 0x00FF3B30);
-    gfx_rect(window.x + 116, window.y + window.h - 44, 28, 18, 0x000078FF);
-    gfx_rect(window.x + 156, window.y + window.h - 44, 28, 18, 0x0000A86B);
-    gfx_text_bold(window.x + 214, window.y + window.h - 38, "Canvas", 0x00D7DAE4);
+    int cx = paint_canvas_x(window);
+    int cy = paint_canvas_y(window);
+    int cw = paint_canvas_w(window);
+    int ch = paint_canvas_h(window);
+    gfx_rect(cx, cy, cw, ch, 0x00FFFFFF);
+    for (uint8_t row = 0; row < PaintRows; row++) {
+        for (uint8_t col = 0; col < PaintCols; col++) {
+            uint8_t value = window.paint[row][col];
+            if (value >= PaintColorCount) continue;
+            int px = cx + (static_cast<int>(col) * cw) / PaintCols;
+            int py = cy + (static_cast<int>(row) * ch) / PaintRows;
+            int px2 = cx + (static_cast<int>(col + 1) * cw) / PaintCols;
+            int py2 = cy + (static_cast<int>(row + 1) * ch) / PaintRows;
+            gfx_rect(px, py, px2 > px ? px2 - px : 1, py2 > py ? py2 - py : 1, PaintPalette[value]);
+        }
+    }
+    gfx_border(cx, cy, cw, ch, 0x00AEB8CA);
+    gfx_rect(window.x + 18, paint_swatch_y(window) - 8, window.w - 36, 42, 0x00242633);
+    gfx_border(window.x + 18, paint_swatch_y(window) - 8, window.w - 36, 42, 0x004A5060);
+    for (uint8_t i = 0; i < PaintColorCount; i++) {
+        int sx = window.x + 36 + static_cast<int>(i) * 42;
+        gfx_rect(sx, paint_swatch_y(window), 28, 18, PaintPalette[i]);
+        gfx_border(sx - 3, paint_swatch_y(window) - 3, 34, 24, i == window.paint_color ? sys_settings_accent_color() : 0x00626D7C);
+    }
+    gfx_text_bold(window.x + 270, window.y + window.h - 38, "C Clear", 0x00D7DAE4);
 }
 
 void draw_terminal_window(DesktopWindow &window) {
@@ -690,6 +742,81 @@ void handle_settings_click(const DesktopWindow &window, int x, int y) {
     }
 }
 
+uint8_t paint_cell_at(const DesktopWindow &window, int x, int y, int *col, int *row) {
+    int cx = paint_canvas_x(window);
+    int cy = paint_canvas_y(window);
+    int cw = paint_canvas_w(window);
+    int ch = paint_canvas_h(window);
+    if (x < cx || x >= cx + cw || y < cy || y >= cy + ch) return 0;
+    *col = ((x - cx) * PaintCols) / cw;
+    *row = ((y - cy) * PaintRows) / ch;
+    return 1;
+}
+
+void paint_dot(DesktopWindow &window, int col, int row) {
+    for (int yy = -1; yy <= 1; yy++) {
+        for (int xx = -1; xx <= 1; xx++) {
+            int target_col = col + xx;
+            int target_row = row + yy;
+            if (target_col < 0 || target_col >= PaintCols || target_row < 0 || target_row >= PaintRows) continue;
+            window.paint[target_row][target_col] = window.paint_color;
+        }
+    }
+}
+
+void paint_stroke(DesktopWindow &window, int col0, int row0, int col1, int row1) {
+    int dx = col1 - col0;
+    int dy = row1 - row0;
+    int steps = dx < 0 ? -dx : dx;
+    int ady = dy < 0 ? -dy : dy;
+    if (ady > steps) steps = ady;
+    for (int i = 0; i <= steps; i++) {
+        int col = col0 + (dx * i) / (steps ? steps : 1);
+        int row = row0 + (dy * i) / (steps ? steps : 1);
+        paint_dot(window, col, row);
+    }
+}
+
+void handle_paint_motion(DesktopWindow &window, int x, int y) {
+    int col = 0;
+    int row = 0;
+    if (!paint_cell_at(window, x, y, &col, &row)) {
+        window.painting = 0;
+        return;
+    }
+    if (!window.painting) {
+        window.painting = 1;
+        window.paint_last_col = col;
+        window.paint_last_row = row;
+    }
+    paint_stroke(window, window.paint_last_col, window.paint_last_row, col, row);
+    window.paint_last_col = col;
+    window.paint_last_row = row;
+    notice = "Painting";
+}
+
+void handle_paint_click(DesktopWindow &window, int x, int y) {
+    int sy = paint_swatch_y(window);
+    if (y >= sy - 8 && y < sy + 34) {
+        for (uint8_t i = 0; i < PaintColorCount; i++) {
+            int sx = window.x + 36 + static_cast<int>(i) * 42;
+            if (x >= sx - 3 && x < sx + 31) {
+                window.paint_color = i;
+                window.painting = 0;
+                notice = "Color selected";
+                return;
+            }
+        }
+        if (x >= window.x + 260 && x < window.x + 344) {
+            paint_clear(window);
+            window.painting = 0;
+            notice = "Canvas cleared";
+        }
+        return;
+    }
+    handle_paint_motion(window, x, y);
+}
+
 void handle_window_click(uint8_t index, int x, int y) {
     bring_to_front(index);
     DesktopWindow &window = windows[active_window];
@@ -702,6 +829,7 @@ void handle_window_click(uint8_t index, int x, int y) {
         return;
     }
     if (window.type == 0) handle_files_click(window, x, y);
+    else if (window.type == 2) handle_paint_click(window, x, y);
     else if (window.type == 4) handle_settings_click(window, x, y);
 }
 
@@ -737,6 +865,10 @@ void handle_window_key(uint16_t key) {
         sys_settings_set_wallpaper(static_cast<uint8_t>(key - '1'));
     } else if (window.type == 4 && key >= '4' && key <= '7') {
         sys_settings_set_accent(static_cast<uint8_t>(key - '4'));
+    } else if (window.type == 2 && (key == 'c' || key == 'C')) {
+        paint_clear(window);
+        window.painting = 0;
+        notice = "Canvas cleared";
     }
     draw();
 }
@@ -772,9 +904,19 @@ extern "C" void app_luma_tick(uint32_t ticks) {
         }
         drag_window = NoWindow;
     }
+    if (active_window != NoWindow && active_window < window_count && windows[active_window].type == 2) {
+        if (click && windows[active_window].painting) {
+            handle_paint_motion(windows[active_window], x, y);
+            draw();
+            last_left = click;
+            last_right = right;
+            return;
+        }
+        if (!click) windows[active_window].painting = 0;
+    }
     uint8_t over_window = (context_menu || menu) ? NoWindow : window_at(x, y);
     uint8_t next_launcher = (context_menu || over_window != NoWindow) ? NoHover : launcher_at(x, y);
-    uint8_t next_dock = context_menu ? NoHover : dock_at(x, y);
+    uint8_t next_dock = (context_menu || over_window != NoWindow) ? NoHover : dock_at(x, y);
     uint8_t next_menu = context_menu ? NoHover : menu_at(x, y);
     uint8_t next_context = context_at(x, y);
     uint32_t second = clock_seconds();
