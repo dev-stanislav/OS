@@ -660,7 +660,7 @@ void draw_windows() {
 }
 
 void draw() {
-    gfx_cursor_hide();
+    gfx_begin_frame();
     wallpaper();
     top_panel();
     for (uint8_t i = 0; i < launcher_count; i++) desktop_icon(launchers[i], hover_launcher == i);
@@ -668,6 +668,7 @@ void draw() {
     start_menu();
     dock();
     context_menu_draw();
+    gfx_present();
     gfx_cursor(mouse_x(), mouse_y());
 }
 
