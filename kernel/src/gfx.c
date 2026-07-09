@@ -17,13 +17,9 @@ static uint32_t cursor_saved[23];
 static int cursor_x, cursor_y;
 static uint8_t cursor_visible;
 static uint8_t buffering;
-static uint8_t font_style=0;
 static void vbe(uint16_t index,uint16_t value){outw(VBE_INDEX,index);outw(VBE_DATA,value);}
 static uint32_t *target(void){return buffering?backbuffer:(uint32_t*)fb;}
-static uint32_t mix(uint32_t a,uint32_t b){return ((((a>>16)&255)+((b>>16)&255))/2<<16)|((((a>>8)&255)+((b>>8)&255))/2<<8)|(((a&255)+(b&255))/2);}
 static void solid_pixel(int x,int y,uint32_t color){if(x>=0&&x<GFX_WIDTH&&y>=0&&y<GFX_HEIGHT)target()[(uint32_t)y*GFX_WIDTH+(uint32_t)x]=color;}
-static void soft_pixel(int x,int y,uint32_t color){if(x>=0&&x<GFX_WIDTH&&y>=0&&y<GFX_HEIGHT){uint32_t*t=target();uint32_t i=(uint32_t)y*GFX_WIDTH+(uint32_t)x;t[i]=mix(color,t[i]);}}
-static void text_pixel(int x,int y,uint32_t color){if(font_style==1){soft_pixel(x+1,y,color);soft_pixel(x,y+1,color);}else if(font_style==2){solid_pixel(x+1,y,color);solid_pixel(x,y+1,color);}solid_pixel(x,y,color);}
 void gfx_init(void){fb=(volatile uint32_t*)paging_framebuffer_address();cursor_visible=0;buffering=0;vbe(VBE_ENABLE,0);vbe(VBE_XRES,GFX_WIDTH);vbe(VBE_YRES,GFX_HEIGHT);vbe(VBE_BPP,32);vbe(VBE_ENABLE,VBE_ENABLED|VBE_LFB);}
 void gfx_shutdown(void){vbe(VBE_ENABLE,0);cursor_visible=0;buffering=0;}
 void gfx_clear(uint32_t color){uint32_t*t=target();for(uint32_t i=0;i<GFX_WIDTH*GFX_HEIGHT;i++)t[i]=color;}
@@ -34,10 +30,8 @@ void gfx_pixel(int x,int y,uint32_t color){solid_pixel(x,y,color);}
 static const uint8_t font[][5]={{0,0,0,0,0},{31,36,68,36,31},{127,73,73,73,54},{62,65,65,65,34},{127,65,65,34,28},{127,73,73,73,65},{127,72,72,72,64},{62,65,73,73,47},{127,8,8,8,127},{0,65,127,65,0},{2,1,1,1,126},{127,8,20,34,65},{127,1,1,1,1},{127,32,16,32,127},{127,32,16,8,127},{62,65,65,65,62},{127,72,72,72,48},{62,65,69,66,61},{127,72,76,74,49},{49,73,73,73,70},{64,64,127,64,64},{126,1,1,1,126},{124,2,1,2,124},{126,1,14,1,126},{99,20,8,20,99},{96,16,15,16,96},{67,69,73,81,97},{0,0,0,0,0},{0,66,127,64,0},{66,97,81,73,70},{33,65,69,75,49},{24,20,18,127,16},{39,69,69,69,57},{60,74,73,73,48},{1,113,9,5,3},{54,73,73,73,54},{6,73,73,41,30},{0,0,0,0,0}};
 static const uint8_t digits[][5]={{62,65,65,65,62},{0,33,127,1,0},{33,67,69,73,49},{66,65,81,105,70},{12,20,36,127,4},{114,81,81,81,78},{30,41,73,73,6},{64,71,72,80,96},{54,73,73,73,54},{48,73,73,74,60}};
 static const uint8_t *glyph(char c){static const uint8_t colon[5]={0,20,0,20,0},dash[5]={8,8,8,8,0},dot[5]={0,1,1,0,0},slash[5]={1,2,4,8,16},under[5]={1,1,1,1,1},gt[5]={65,34,20,8,0};if(c>='A'&&c<='Z')return font[c-'A'+1];if(c>='a'&&c<='z')return font[c-'a'+1];if(c>='0'&&c<='9')return digits[c-'0'];if(c==':')return colon;if(c=='-')return dash;if(c=='.')return dot;if(c=='/')return slash;if(c=='_')return under;if(c=='>')return gt;return font[0];}
-void gfx_text(int x,int y,const char *text,uint32_t color){while(*text){const uint8_t*g=glyph(*text++);for(int col=0;col<5;col++)for(int row=0;row<7;row++)if(g[col]&(1<<row))text_pixel(x+col,y+6-row,color);x+=6;}}
+void gfx_text(int x,int y,const char *text,uint32_t color){while(*text){const uint8_t*g=glyph(*text++);for(int col=0;col<5;col++)for(int row=0;row<7;row++)if(g[col]&(1<<row))solid_pixel(x+col,y+6-row,color);x+=6;}}
 void gfx_text_bold(int x,int y,const char *text,uint32_t color){gfx_text(x,y,text,color);gfx_text(x+1,y,text,color);}
-void gfx_set_font(uint8_t style){font_style=(uint8_t)(style%3);}
-uint8_t gfx_font(void){return font_style;}
 void gfx_begin_frame(void){gfx_cursor_hide();buffering=1;}
 void gfx_present(void){buffering=0;for(uint32_t i=0;i<GFX_WIDTH*GFX_HEIGHT;i++)fb[i]=backbuffer[i];}
 void gfx_cursor_hide(void){if(!cursor_visible)return;for(int i=0;i<12;i++)if(cursor_x+i<GFX_WIDTH&&cursor_y<GFX_HEIGHT)fb[cursor_y*GFX_WIDTH+cursor_x+i]=cursor_saved[i];for(int i=1;i<12;i++)if(cursor_x<GFX_WIDTH&&cursor_y+i<GFX_HEIGHT)fb[(cursor_y+i)*GFX_WIDTH+cursor_x]=cursor_saved[11+i];cursor_visible=0;}
