@@ -22,6 +22,12 @@ constexpr uint32_t AccentSoft = 0x00008F90;
 constexpr uint32_t Pink = 0x00F2487A;
 constexpr uint32_t Violet = 0x0053337C;
 constexpr uint32_t NoHover = 255;
+constexpr uint32_t DoubleClickTicks = TIMER_HZ / 2;
+constexpr int IconDragThreshold = 4;
+constexpr int DesktopIconMinX = 16;
+constexpr int DesktopIconMinY = 42;
+constexpr int DesktopIconMaxX = GFX_WIDTH - 104;
+constexpr int DesktopIconMaxY = 474;
 constexpr uint8_t ContextCount = 7;
 constexpr int ContextHeight = 16 + ContextCount * 28;
 
@@ -32,6 +38,11 @@ struct Launcher {
     const char *status;
     const char *app;
     uint8_t kind;
+};
+
+struct DesktopIcon {
+    int x;
+    int y;
 };
 
 constexpr Launcher launchers[] = {
@@ -111,10 +122,20 @@ uint8_t hover_menu;
 uint8_t hover_dock;
 uint8_t hover_context;
 uint8_t context_menu;
+uint8_t selected_launcher;
+uint8_t drag_launcher;
+uint8_t last_click_launcher;
+uint8_t desktop_icon_moved;
 int context_x;
 int context_y;
+int desktop_drag_x;
+int desktop_drag_y;
+int desktop_press_x;
+int desktop_press_y;
 uint32_t last_clock_second;
+uint32_t last_click_ticks;
 const char *notice;
+DesktopIcon desktop_icons[launcher_count];
 DesktopWindow windows[MaxWindows];
 uint8_t window_count;
 uint8_t active_window;
@@ -155,6 +176,10 @@ void two_digits(uint32_t value, char *out) {
 void append_text(char *out, uint16_t cap, const char *text) {
     size_t length = kstrlen(out);
     kstrcpy(out + length, text, cap > length ? cap - length : 0);
+}
+
+int abs_int(int value) {
+    return value < 0 ? -value : value;
 }
 
 uint32_t clock_seconds() {
@@ -272,22 +297,32 @@ void icon_art(int x, int y, uint8_t kind, uint8_t large) {
     }
 }
 
-void desktop_icon(const Launcher &launcher, uint8_t selected) {
-    int x = launcher.x;
-    int y = launcher.y;
+void desktop_icon(uint8_t index, uint8_t selected, uint8_t hovered) {
+    const Launcher &launcher = launchers[index];
+    int x = desktop_icons[index].x;
+    int y = desktop_icons[index].y;
     if (selected) {
         gfx_rect(x - 10, y - 7, 96, 58, AccentSoft);
         gfx_border(x - 10, y - 7, 96, 58, Accent);
+    } else if (hovered) {
+        gfx_border(x - 10, y - 7, 96, 58, AccentSoft);
     }
     icon_art(x + 12, y, launcher.kind, 0);
     text_shadow(x, y + 42, launcher.label, White);
 }
 
-uint8_t launcher_at(int x, int y) {
+void draw_desktop_icons() {
     for (uint8_t i = 0; i < launcher_count; i++) {
-        const Launcher &launcher = launchers[i];
-        if (x >= launcher.x - 12 && x < launcher.x + 96 &&
-            y >= launcher.y - 8 && y < launcher.y + 64) return i;
+        if (selected_launcher != i) desktop_icon(i, 0, hover_launcher == i);
+    }
+    if (selected_launcher < launcher_count) desktop_icon(selected_launcher, 1, hover_launcher == selected_launcher);
+}
+
+uint8_t launcher_at(int x, int y) {
+    for (int i = static_cast<int>(launcher_count) - 1; i >= 0; i--) {
+        const DesktopIcon &icon = desktop_icons[i];
+        if (x >= icon.x - 12 && x < icon.x + 96 &&
+            y >= icon.y - 8 && y < icon.y + 64) return static_cast<uint8_t>(i);
     }
     return NoHover;
 }
@@ -786,7 +821,7 @@ void draw() {
     gfx_begin_frame();
     wallpaper();
     top_panel();
-    for (uint8_t i = 0; i < launcher_count; i++) desktop_icon(launchers[i], hover_launcher == i);
+    draw_desktop_icons();
     draw_windows();
     start_menu();
     dock();
@@ -800,6 +835,68 @@ void clamp_window(DesktopWindow &window) {
     if (window.y < 34) window.y = 34;
     if (window.x + window.w > GFX_WIDTH - 6) window.x = GFX_WIDTH - 6 - window.w;
     if (window.y + window.h > 540) window.y = 540 - window.h;
+}
+
+void init_desktop_icons() {
+    for (uint8_t i = 0; i < launcher_count; i++) {
+        desktop_icons[i].x = launchers[i].x;
+        desktop_icons[i].y = launchers[i].y;
+    }
+}
+
+void clamp_desktop_icon(uint8_t index) {
+    if (index >= launcher_count) return;
+    if (desktop_icons[index].x < DesktopIconMinX) desktop_icons[index].x = DesktopIconMinX;
+    if (desktop_icons[index].y < DesktopIconMinY) desktop_icons[index].y = DesktopIconMinY;
+    if (desktop_icons[index].x > DesktopIconMaxX) desktop_icons[index].x = DesktopIconMaxX;
+    if (desktop_icons[index].y > DesktopIconMaxY) desktop_icons[index].y = DesktopIconMaxY;
+}
+
+void start_desktop_icon_press(uint8_t index, int x, int y) {
+    if (index >= launcher_count) return;
+    selected_launcher = index;
+    drag_launcher = index;
+    desktop_icon_moved = 0;
+    desktop_drag_x = x - desktop_icons[index].x;
+    desktop_drag_y = y - desktop_icons[index].y;
+    desktop_press_x = x;
+    desktop_press_y = y;
+    notice = launchers[index].status;
+}
+
+void update_desktop_icon_drag(int x, int y) {
+    if (drag_launcher >= launcher_count) return;
+    int dx = x - desktop_press_x;
+    int dy = y - desktop_press_y;
+    if (!desktop_icon_moved &&
+        (abs_int(dx) >= IconDragThreshold || abs_int(dy) >= IconDragThreshold)) {
+        desktop_icon_moved = 1;
+    }
+    if (!desktop_icon_moved) return;
+    desktop_icons[drag_launcher].x = x - desktop_drag_x;
+    desktop_icons[drag_launcher].y = y - desktop_drag_y;
+    clamp_desktop_icon(drag_launcher);
+}
+
+uint8_t finish_desktop_icon_press(uint32_t ticks) {
+    if (drag_launcher >= launcher_count) return 0;
+    uint8_t released = drag_launcher;
+    drag_launcher = NoHover;
+    if (desktop_icon_moved) {
+        desktop_icon_moved = 0;
+        last_click_launcher = NoHover;
+        notice = "Icon moved";
+        return 0;
+    }
+    if (last_click_launcher == released && ticks - last_click_ticks <= DoubleClickTicks) {
+        last_click_launcher = NoHover;
+        launch(released);
+        return 1;
+    }
+    last_click_launcher = released;
+    last_click_ticks = ticks;
+    notice = launchers[released].status;
+    return 0;
 }
 
 void start_drag(uint8_t index, int x, int y) {
@@ -1144,19 +1241,38 @@ extern "C" void app_luma_start(char **args, uint8_t count) {
     gfx_init();
     menu = last_left = last_right = context_menu = 0;
     hover_launcher = hover_menu = hover_dock = hover_context = NoHover;
+    selected_launcher = drag_launcher = last_click_launcher = NoHover;
+    desktop_icon_moved = 0;
+    desktop_drag_x = desktop_drag_y = desktop_press_x = desktop_press_y = 0;
+    last_click_ticks = 0;
     window_count = 0;
     active_window = drag_window = NoWindow;
     last_clock_second = 0xFFFFFFFFu;
     notice = "Ready";
+    init_desktop_icons();
     draw();
 }
 
 extern "C" void app_luma_tick(uint32_t ticks) {
-    (void)ticks;
     int x = mouse_x();
     int y = mouse_y();
     uint8_t click = mouse_left();
     uint8_t right = mouse_right();
+    if (drag_launcher != NoHover) {
+        if (click) {
+            update_desktop_icon_drag(x, y);
+            draw();
+            last_left = click;
+            last_right = right;
+            return;
+        }
+        uint8_t launched = finish_desktop_icon_press(ticks);
+        last_left = click;
+        last_right = right;
+        draw();
+        if (launched) return;
+        return;
+    }
     if (drag_window != NoWindow) {
         if (click) {
             update_drag(x, y);
@@ -1178,8 +1294,8 @@ extern "C" void app_luma_tick(uint32_t ticks) {
         if (!click) windows[active_window].painting = 0;
     }
     uint8_t over_window = (context_menu || menu) ? NoWindow : window_at(x, y);
-    uint8_t next_launcher = (context_menu || over_window != NoWindow) ? NoHover : launcher_at(x, y);
-    uint8_t next_dock = (context_menu || over_window != NoWindow) ? NoHover : dock_at(x, y);
+    uint8_t next_launcher = (context_menu || menu || over_window != NoWindow) ? NoHover : launcher_at(x, y);
+    uint8_t next_dock = (context_menu || menu || over_window != NoWindow) ? NoHover : dock_at(x, y);
     uint8_t next_menu = context_menu ? NoHover : menu_at(x, y);
     uint8_t next_context = context_at(x, y);
     uint32_t second = clock_seconds();
@@ -1243,13 +1359,18 @@ extern "C" void app_luma_tick(uint32_t ticks) {
             draw();
             return;
         } else if (hover_launcher != NoHover) {
-            launch(hover_launcher);
+            start_desktop_icon_press(hover_launcher, x, y);
             last_left = click;
             last_right = right;
             draw();
             return;
         } else if (menu) {
             menu = 0;
+            redraw = 1;
+        } else if (selected_launcher != NoHover) {
+            selected_launcher = NoHover;
+            last_click_launcher = NoHover;
+            notice = "Ready";
             redraw = 1;
         }
     }
