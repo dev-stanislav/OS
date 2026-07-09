@@ -43,6 +43,25 @@ constexpr Launcher launchers[] = {
 };
 
 constexpr uint8_t launcher_count = static_cast<uint8_t>(sizeof(launchers) / sizeof(launchers[0]));
+constexpr uint8_t MaxWindows = 8;
+constexpr uint8_t NoWindow = 255;
+constexpr uint8_t TerminalRows = 5;
+constexpr uint8_t TerminalCols = 58;
+
+struct DesktopWindow {
+    uint8_t type;
+    int x;
+    int y;
+    int w;
+    int h;
+    int drag_x;
+    int drag_y;
+    int directory;
+    uint8_t selected;
+    uint8_t line_len;
+    char line[48];
+    char output[TerminalRows][TerminalCols];
+};
 
 uint8_t menu;
 uint8_t last_left;
@@ -56,6 +75,10 @@ int context_x;
 int context_y;
 uint32_t last_clock_second;
 const char *notice;
+DesktopWindow windows[MaxWindows];
+uint8_t window_count;
+uint8_t active_window;
+uint8_t drag_window;
 
 constexpr const char *context_labels[ContextCount] = {
     "New Folder",
@@ -256,9 +279,101 @@ uint8_t context_at(int x, int y) {
     return static_cast<uint8_t>((y - context_y - 8) / 28);
 }
 
+const char *window_title(uint8_t type) {
+    return type < launcher_count ? launchers[type].status : "Window";
+}
+
+uint8_t window_contains(const DesktopWindow &window, int x, int y) {
+    return x >= window.x && x < window.x + window.w && y >= window.y && y < window.y + window.h;
+}
+
+uint8_t window_close_hit(const DesktopWindow &window, int x, int y) {
+    return x >= window.x + 10 && x < window.x + 25 && y >= window.y + 9 && y < window.y + 24;
+}
+
+uint8_t window_title_hit(const DesktopWindow &window, int x, int y) {
+    return x >= window.x && x < window.x + window.w && y >= window.y && y < window.y + 30;
+}
+
+uint8_t window_at(int x, int y) {
+    for (int i = static_cast<int>(window_count) - 1; i >= 0; i--) {
+        if (window_contains(windows[i], x, y)) return static_cast<uint8_t>(i);
+    }
+    return NoWindow;
+}
+
+void terminal_clear(DesktopWindow &window) {
+    for (uint8_t row = 0; row < TerminalRows; row++) window.output[row][0] = '\0';
+}
+
+void terminal_print(DesktopWindow &window, const char *text) {
+    for (uint8_t row = 0; row < TerminalRows; row++) {
+        if (window.output[row][0] == '\0') {
+            kstrcpy(window.output[row], text, TerminalCols);
+            return;
+        }
+    }
+    for (uint8_t row = 1; row < TerminalRows; row++) kstrcpy(window.output[row - 1], window.output[row], TerminalCols);
+    kstrcpy(window.output[TerminalRows - 1], text, TerminalCols);
+}
+
+void window_defaults(DesktopWindow &window, uint8_t type) {
+    int offset = static_cast<int>(window_count) * 22;
+    window.type = type;
+    window.x = 156 + offset;
+    window.y = 86 + offset;
+    window.drag_x = window.drag_y = 0;
+    window.directory = app_get_workdir();
+    window.selected = 0;
+    window.line_len = 0;
+    window.line[0] = '\0';
+    terminal_clear(window);
+    if (type == 0) { window.w = 480; window.h = 330; }
+    else if (type == 1) { window.w = 438; window.h = 306; }
+    else if (type == 2) { window.w = 404; window.h = 318; }
+    else if (type == 3) {
+        window.w = 452;
+        window.h = 318;
+        terminal_print(window, "Luma Terminal v1");
+        terminal_print(window, "type help for commands");
+    } else {
+        window.w = 420;
+        window.h = 310;
+    }
+    if (window.x + window.w > GFX_WIDTH - 18) window.x = 118;
+    if (window.y + window.h > 540) window.y = 76;
+}
+
+void bring_to_front(uint8_t index) {
+    if (index >= window_count) return;
+    DesktopWindow selected = windows[index];
+    for (uint8_t i = index; i + 1 < window_count; i++) windows[i] = windows[i + 1];
+    windows[window_count - 1] = selected;
+    active_window = static_cast<uint8_t>(window_count - 1);
+}
+
+void close_window(uint8_t index) {
+    if (index >= window_count) return;
+    for (uint8_t i = index; i + 1 < window_count; i++) windows[i] = windows[i + 1];
+    window_count--;
+    active_window = window_count ? static_cast<uint8_t>(window_count - 1) : NoWindow;
+    drag_window = NoWindow;
+    notice = window_count ? "Window closed" : "Ready";
+}
+
+void open_window(uint8_t type) {
+    if (type >= launcher_count) return;
+    if (window_count >= MaxWindows) {
+        notice = "Too many windows";
+        return;
+    }
+    window_defaults(windows[window_count], type);
+    active_window = window_count++;
+    notice = launchers[type].status;
+}
+
 void launch(uint8_t index) {
-    if (index >= launcher_count) return;
-    app_run(launchers[index].app, 0, 0);
+    open_window(index);
 }
 
 void make_candidate(char *out, const char *base, const char *ext, uint8_t number) {
@@ -375,14 +490,11 @@ uint8_t context_action(uint8_t index) {
     if (index == 0) create_desktop_item(1);
     else if (index == 1) create_desktop_item(0);
     else if (index == 2) {
-        app_run("tbf", 0, 0);
-        return 1;
+        open_window(0);
     } else if (index == 3) {
-        app_run("terminal", 0, 0);
-        return 1;
+        open_window(3);
     } else if (index == 4) {
-        app_run("settings", 0, 0);
-        return 1;
+        open_window(4);
     } else if (index == 5) notice = "Desktop refreshed";
     else if (index == 6) {
         sys_settings_next_wallpaper();
@@ -403,15 +515,230 @@ void open_context_menu(int x, int y) {
     hover_context = context_at(x, y);
 }
 
+void window_frame(const DesktopWindow &window, uint8_t active) {
+    uint32_t edge = active ? sys_settings_accent_color() : 0x00626D7C;
+    gfx_rect(window.x + 8, window.y + 10, window.w, window.h, 0x00333A47);
+    gfx_rect(window.x, window.y, window.w, window.h, 0x001A1C26);
+    gfx_border(window.x, window.y, window.w, window.h, edge);
+    gfx_rect(window.x + 1, window.y + 1, window.w - 2, 28, 0x003B3D47);
+    circle(window.x + 16, window.y + 16, 6, 0x00FF5F57);
+    circle(window.x + 34, window.y + 16, 6, 0x00FFBD2E);
+    circle(window.x + 52, window.y + 16, 6, 0x0028C840);
+    gfx_text_bold(window.x + window.w / 2 - 42, window.y + 11, window_title(window.type), 0x00D7DAE4);
+}
+
+void draw_files_window(DesktopWindow &window) {
+    char path[80];
+    fs_path(window.directory, path, sizeof(path));
+    gfx_rect(window.x + 14, window.y + 42, window.w - 28, 24, 0x00242633);
+    gfx_border(window.x + 14, window.y + 42, window.w - 28, 24, 0x004A5060);
+    gfx_text_bold(window.x + 24, window.y + 51, path, Accent);
+    gfx_rect(window.x + 14, window.y + 76, window.w - 28, window.h - 92, 0x001F2230);
+    gfx_border(window.x + 14, window.y + 76, window.w - 28, window.h - 92, 0x004A5060);
+    uint8_t row = 0;
+    for (int index = 0; index < FS_MAX_NODES && row < 8; index++) {
+        const fs_node_t *node = fs_node(index);
+        if (!node || node->parent != window.directory) continue;
+        int y = window.y + 92 + row * 24;
+        if (row == window.selected) gfx_rect(window.x + 22, y - 5, window.w - 44, 20, 0x00324D6B);
+        gfx_text_bold(window.x + 28, y, node->type == FS_DIR ? "[DIR]" : "[FILE]", node->type == FS_DIR ? 0x0000D6D6 : 0x00FFFFFF);
+        gfx_text_bold(window.x + 86, y, node->name, 0x00FFFFFF);
+        row++;
+    }
+    if (!row) gfx_text_bold(window.x + 170, window.y + 190, "Empty Folder", 0x008A94A8);
+}
+
+void draw_editor_window(const DesktopWindow &window) {
+    gfx_rect(window.x + 16, window.y + 48, window.w - 32, window.h - 70, 0x00F5F7FB);
+    gfx_border(window.x + 16, window.y + 48, window.w - 32, window.h - 70, 0x00AEB8CA);
+    gfx_text_bold(window.x + 30, window.y + 66, "untitled.txt", 0x00242A35);
+    gfx_text(window.x + 30, window.y + 96, "Multiple windows are now managed by Luma.", 0x00242A35);
+    gfx_text(window.x + 30, window.y + 114, "Open Terminal, Files and Settings together.", 0x00242A35);
+}
+
+void draw_paint_window(const DesktopWindow &window) {
+    gfx_rect(window.x + 18, window.y + 48, window.w - 36, window.h - 104, 0x00FFFFFF);
+    gfx_border(window.x + 18, window.y + 48, window.w - 36, window.h - 104, 0x00AEB8CA);
+    gfx_rect(window.x + 36, window.y + window.h - 44, 28, 18, 0x00000000);
+    gfx_rect(window.x + 76, window.y + window.h - 44, 28, 18, 0x00FF3B30);
+    gfx_rect(window.x + 116, window.y + window.h - 44, 28, 18, 0x000078FF);
+    gfx_rect(window.x + 156, window.y + window.h - 44, 28, 18, 0x0000A86B);
+    gfx_text_bold(window.x + 214, window.y + window.h - 38, "Canvas", 0x00D7DAE4);
+}
+
+void draw_terminal_window(DesktopWindow &window) {
+    gfx_rect(window.x + 10, window.y + 34, window.w - 20, window.h - 44, 0x00161823);
+    gfx_border(window.x + 10, window.y + 34, window.w - 20, window.h - 44, 0x003A4152);
+    for (uint8_t row = 0; row < TerminalRows; row++) {
+        gfx_text_bold(window.x + 20, window.y + 48 + row * 18, window.output[row], row ? 0x00FFFFFF : Accent);
+    }
+    gfx_text_bold(window.x + 20, window.y + window.h - 30, ">", Accent);
+    gfx_text_bold(window.x + 34, window.y + window.h - 30, window.line, 0x00FFFFFF);
+}
+
+void draw_settings_window(const DesktopWindow &window) {
+    const sys_settings_t *settings = sys_settings_get();
+    uint32_t accent = sys_settings_accent_color();
+    gfx_rect(window.x + 18, window.y + 48, 120, window.h - 66, 0x00242633);
+    gfx_border(window.x + 18, window.y + 48, 120, window.h - 66, 0x004A5060);
+    gfx_text_bold(window.x + 34, window.y + 70, "Appearance", accent);
+    gfx_text_bold(window.x + 156, window.y + 62, "Wallpaper", 0x00FFFFFF);
+    gfx_text_bold(window.x + 156, window.y + 86, settings->wallpaper == 0 ? "[Sky]" : " Sky ", settings->wallpaper == 0 ? accent : 0x00D7DAE4);
+    gfx_text_bold(window.x + 226, window.y + 86, settings->wallpaper == 1 ? "[Mint]" : " Mint ", settings->wallpaper == 1 ? accent : 0x00D7DAE4);
+    gfx_text_bold(window.x + 306, window.y + 86, settings->wallpaper == 2 ? "[Dusk]" : " Dusk ", settings->wallpaper == 2 ? accent : 0x00D7DAE4);
+    gfx_text_bold(window.x + 156, window.y + 132, "Accent", 0x00FFFFFF);
+    gfx_rect(window.x + 156, window.y + 158, 32, 22, 0x000078FF);
+    gfx_rect(window.x + 204, window.y + 158, 32, 22, 0x0000D6D6);
+    gfx_rect(window.x + 252, window.y + 158, 32, 22, 0x00F2487A);
+    gfx_rect(window.x + 300, window.y + 158, 32, 22, 0x0000A86B);
+    gfx_border(window.x + 153 + settings->accent * 48, window.y + 155, 38, 28, 0x00FFFFFF);
+}
+
+void draw_window(DesktopWindow &window, uint8_t active) {
+    window_frame(window, active);
+    if (window.type == 0) draw_files_window(window);
+    else if (window.type == 1) draw_editor_window(window);
+    else if (window.type == 2) draw_paint_window(window);
+    else if (window.type == 3) draw_terminal_window(window);
+    else draw_settings_window(window);
+}
+
+void draw_windows() {
+    for (uint8_t i = 0; i < window_count; i++) draw_window(windows[i], i == active_window);
+}
+
 void draw() {
     gfx_cursor_hide();
     wallpaper();
     top_panel();
     for (uint8_t i = 0; i < launcher_count; i++) desktop_icon(launchers[i], hover_launcher == i);
+    draw_windows();
     start_menu();
     dock();
     context_menu_draw();
     gfx_cursor(mouse_x(), mouse_y());
+}
+
+void clamp_window(DesktopWindow &window) {
+    if (window.x < 6) window.x = 6;
+    if (window.y < 34) window.y = 34;
+    if (window.x + window.w > GFX_WIDTH - 6) window.x = GFX_WIDTH - 6 - window.w;
+    if (window.y + window.h > 540) window.y = 540 - window.h;
+}
+
+void start_drag(uint8_t index, int x, int y) {
+    bring_to_front(index);
+    drag_window = active_window;
+    windows[drag_window].drag_x = x - windows[drag_window].x;
+    windows[drag_window].drag_y = y - windows[drag_window].y;
+}
+
+void update_drag(int x, int y) {
+    if (drag_window >= window_count) return;
+    windows[drag_window].x = x - windows[drag_window].drag_x;
+    windows[drag_window].y = y - windows[drag_window].drag_y;
+    clamp_window(windows[drag_window]);
+}
+
+uint8_t file_child_at(DesktopWindow &window, uint8_t wanted_row) {
+    if (wanted_row >= 8) return NoWindow;
+    uint8_t row = 0;
+    for (int index = 0; index < FS_MAX_NODES; index++) {
+        const fs_node_t *node = fs_node(index);
+        if (!node || node->parent != window.directory) continue;
+        if (row == wanted_row) return static_cast<uint8_t>(index);
+        row++;
+    }
+    return NoWindow;
+}
+
+void handle_files_click(DesktopWindow &window, int x, int y) {
+    if (x < window.x + 14 || x >= window.x + window.w - 14) return;
+    if (y < window.y + 86 || y >= window.y + window.h - 24) return;
+    uint8_t row = static_cast<uint8_t>((y - (window.y + 92)) / 24);
+    uint8_t child = file_child_at(window, row);
+    if (child == NoWindow) return;
+    const fs_node_t *node = fs_node(child);
+    if (!node) return;
+    window.selected = row;
+    if (node->type == FS_DIR) {
+        window.directory = child;
+        window.selected = 0;
+        notice = "Folder opened";
+    } else {
+        open_window(1);
+        notice = "File selected";
+    }
+}
+
+void handle_settings_click(const DesktopWindow &window, int x, int y) {
+    if (y >= window.y + 78 && y < window.y + 106) {
+        uint8_t changed = 1;
+        if (x >= window.x + 150 && x < window.x + 210) sys_settings_set_wallpaper(0);
+        else if (x >= window.x + 220 && x < window.x + 292) sys_settings_set_wallpaper(1);
+        else if (x >= window.x + 300 && x < window.x + 374) sys_settings_set_wallpaper(2);
+        else changed = 0;
+        if (changed) notice = "Wallpaper changed";
+    } else if (y >= window.y + 152 && y < window.y + 186) {
+        uint8_t changed = 1;
+        if (x >= window.x + 150 && x < window.x + 194) sys_settings_set_accent(0);
+        else if (x >= window.x + 198 && x < window.x + 242) sys_settings_set_accent(1);
+        else if (x >= window.x + 246 && x < window.x + 290) sys_settings_set_accent(2);
+        else if (x >= window.x + 294 && x < window.x + 338) sys_settings_set_accent(3);
+        else changed = 0;
+        if (changed) notice = "Accent changed";
+    }
+}
+
+void handle_window_click(uint8_t index, int x, int y) {
+    bring_to_front(index);
+    DesktopWindow &window = windows[active_window];
+    if (window_close_hit(window, x, y)) {
+        close_window(active_window);
+        return;
+    }
+    if (window_title_hit(window, x, y)) {
+        start_drag(active_window, x, y);
+        return;
+    }
+    if (window.type == 0) handle_files_click(window, x, y);
+    else if (window.type == 4) handle_settings_click(window, x, y);
+}
+
+void execute_terminal(DesktopWindow &window, const char *command) {
+    if (!command || !*command) return;
+    if (kstrcmp(command, "help") == 0) terminal_print(window, "help clear files editor paint terminal settings exit");
+    else if (kstrcmp(command, "clear") == 0) terminal_clear(window);
+    else if (kstrcmp(command, "files") == 0 || kstrcmp(command, "ls") == 0) open_window(0);
+    else if (kstrcmp(command, "editor") == 0 || kstrcmp(command, "edit") == 0) open_window(1);
+    else if (kstrcmp(command, "paint") == 0) open_window(2);
+    else if (kstrcmp(command, "terminal") == 0) open_window(3);
+    else if (kstrcmp(command, "settings") == 0) open_window(4);
+    else if (kstrcmp(command, "exit") == 0) close_window(active_window);
+    else terminal_print(window, "unknown command");
+}
+
+void handle_window_key(uint16_t key) {
+    if (active_window >= window_count) return;
+    DesktopWindow &window = windows[active_window];
+    if (key == '\b' && window.type == 3 && window.line_len) {
+        window.line[--window.line_len] = '\0';
+    } else if (key == '\n' && window.type == 3) {
+        char command[48];
+        kstrcpy(command, window.line, sizeof(command));
+        terminal_print(window, window.line);
+        window.line_len = 0;
+        window.line[0] = '\0';
+        execute_terminal(window, command);
+    } else if (window.type == 3 && key >= 32 && key < 127 && window.line_len < sizeof(window.line) - 1) {
+        window.line[window.line_len++] = static_cast<char>(key);
+        window.line[window.line_len] = '\0';
+    } else if (window.type == 4 && key >= '1' && key <= '3') {
+        sys_settings_set_wallpaper(static_cast<uint8_t>(key - '1'));
+    } else if (window.type == 4 && key >= '4' && key <= '7') {
+        sys_settings_set_accent(static_cast<uint8_t>(key - '4'));
+    }
+    draw();
 }
 
 }
@@ -422,6 +749,8 @@ extern "C" void app_luma_start(char **args, uint8_t count) {
     gfx_init();
     menu = last_left = last_right = context_menu = 0;
     hover_launcher = hover_menu = hover_dock = hover_context = NoHover;
+    window_count = 0;
+    active_window = drag_window = NoWindow;
     last_clock_second = 0xFFFFFFFFu;
     notice = "Ready";
     draw();
@@ -431,14 +760,25 @@ extern "C" void app_luma_tick(uint32_t ticks) {
     (void)ticks;
     int x = mouse_x();
     int y = mouse_y();
-    uint8_t next_launcher = context_menu ? NoHover : launcher_at(x, y);
+    uint8_t click = mouse_left();
+    uint8_t right = mouse_right();
+    if (drag_window != NoWindow) {
+        if (click) {
+            update_drag(x, y);
+            draw();
+            last_left = click;
+            last_right = right;
+            return;
+        }
+        drag_window = NoWindow;
+    }
+    uint8_t over_window = (context_menu || menu) ? NoWindow : window_at(x, y);
+    uint8_t next_launcher = (context_menu || over_window != NoWindow) ? NoHover : launcher_at(x, y);
     uint8_t next_dock = context_menu ? NoHover : dock_at(x, y);
     uint8_t next_menu = context_menu ? NoHover : menu_at(x, y);
     uint8_t next_context = context_at(x, y);
     uint32_t second = clock_seconds();
     uint8_t redraw = 0;
-    uint8_t click = mouse_left();
-    uint8_t right = mouse_right();
 
     if (next_launcher != hover_launcher || next_dock != hover_dock ||
         next_menu != hover_menu || next_context != hover_context || second != last_clock_second) {
@@ -450,7 +790,7 @@ extern "C" void app_luma_tick(uint32_t ticks) {
         redraw = 1;
     }
 
-    if (right && !last_right) {
+    if (right && !last_right && over_window == NoWindow) {
         open_context_menu(x, y);
         redraw = 1;
     }
@@ -480,18 +820,28 @@ extern "C" void app_luma_tick(uint32_t ticks) {
                 return;
             }
             launch(hover_menu);
+            menu = 0;
             last_left = click;
             last_right = right;
+            draw();
             return;
         } else if (hover_dock != NoHover) {
             launch(hover_dock);
             last_left = click;
             last_right = right;
+            draw();
+            return;
+        } else if (over_window != NoWindow) {
+            handle_window_click(over_window, x, y);
+            last_left = click;
+            last_right = right;
+            draw();
             return;
         } else if (hover_launcher != NoHover) {
             launch(hover_launcher);
             last_left = click;
             last_right = right;
+            draw();
             return;
         } else if (menu) {
             menu = 0;
@@ -506,6 +856,10 @@ extern "C" void app_luma_tick(uint32_t ticks) {
 }
 
 extern "C" void app_luma_key(uint16_t key) {
+    if (active_window != NoWindow && active_window < window_count) {
+        handle_window_key(key);
+        return;
+    }
     if (key == 's' || key == 'S' || key == '\n' || key == ' ') {
         menu ^= 1;
         draw();
