@@ -17,7 +17,7 @@ static uint32_t cursor_saved[23];
 static int cursor_x, cursor_y;
 static uint8_t cursor_visible;
 static uint8_t buffering;
-static uint8_t font_style=1;
+static uint8_t font_style=0;
 static void vbe(uint16_t index,uint16_t value){outw(VBE_INDEX,index);outw(VBE_DATA,value);}
 static uint32_t *target(void){return buffering?backbuffer:(uint32_t*)fb;}
 static uint32_t mix(uint32_t a,uint32_t b){return ((((a>>16)&255)+((b>>16)&255))/2<<16)|((((a>>8)&255)+((b>>8)&255))/2<<8)|(((a&255)+(b&255))/2);}

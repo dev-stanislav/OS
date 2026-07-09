@@ -1,7 +1,7 @@
 #include "sys_settings.h"
 #include "../gfx.h"
 
-static sys_settings_t settings = {0, 0, 1};
+static sys_settings_t settings = {0, 0, 0};
 static const uint32_t accents[] = {0x000078FF, 0x0000D6D6, 0x00F2487A, 0x0000A86B};
 
 const sys_settings_t *sys_settings_get(void) {
