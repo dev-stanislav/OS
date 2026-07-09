@@ -214,7 +214,7 @@ static void add_history(const char *command) {
 static void command_help(void) {
     vga_write("system: help clear about uname uptime mem pwd reboot, system time\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("files:  ls [-l] cd mkdir rmdir touch cat write append cp mv rm stat df\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-    vga_write("apps:   minipkg run luma minifetch game\nnet:    net info | net ping | fetch URL [file]\nproc:   ps jobs kill PID, run APP &\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    vga_write("apps:   minipkg run luma settings minifetch game\nnet:    net info | net ping | fetch URL [file]\nproc:   ps jobs kill PID, run APP &\nusers:  user add|list|login, whoami\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("debug:  debug cpu | irq | crash div0|gpf|pf|panic\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("time:   system set utc +03:00\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     vga_write("pkg:    minipkg install ID [url] asks y/n and downloads\n", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
@@ -502,6 +502,7 @@ static void execute_command(char *command) {
     }
     else if (kstrcmp(args[0], "minifetch") == 0) app_run("minifetch",0,0);
     else if (kstrcmp(args[0], "tbf") == 0) { app_set_workdir(current_dir); app_run("tbf",0,0); }
+    else if (kstrcmp(args[0], "settings") == 0) { app_set_workdir(current_dir); app_run("settings",0,0); }
     else if (kstrcmp(args[0], "luma") == 0 || kstrcmp(args[0], "sproot") == 0) { app_set_workdir(current_dir); app_run("luma",0,0); }
     else if (kstrcmp(args[0], "minipkg") == 0 && count > 1) {
         if (kstrcmp(args[1], "list") == 0) app_list(0);

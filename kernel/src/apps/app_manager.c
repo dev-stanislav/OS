@@ -28,6 +28,9 @@ extern void app_free_tick(uint32_t ticks);
 extern void app_paint_start(char **args, uint8_t count);
 extern void app_paint_key(uint16_t key);
 extern void app_paint_tick(uint32_t ticks);
+extern void app_settings_start(char **args, uint8_t count);
+extern void app_settings_key(uint16_t key);
+extern void app_settings_tick(uint32_t ticks);
 extern void app_terminal_start(char **args, uint8_t count);
 extern void app_terminal_key(uint16_t key);
 extern void app_terminal_tick(uint32_t ticks);
@@ -74,7 +77,7 @@ static int package_index(const char *id) {
 }
 
 static uint8_t builtin_package(const char *id) {
-    return kstrcmp(id,"tbf")==0||kstrcmp(id,"luma")==0||kstrcmp(id,"sproot")==0||kstrcmp(id,"free")==0||kstrcmp(id,"paint")==0||kstrcmp(id,"terminal")==0;
+    return kstrcmp(id,"tbf")==0||kstrcmp(id,"luma")==0||kstrcmp(id,"sproot")==0||kstrcmp(id,"free")==0||kstrcmp(id,"paint")==0||kstrcmp(id,"settings")==0||kstrcmp(id,"terminal")==0;
 }
 
 static void package_url(char *url, const char *id) {

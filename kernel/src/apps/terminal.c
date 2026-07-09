@@ -8,7 +8,8 @@
 #define OUT_ROWS 12
 #define OUT_COLS 92
 
-static const app_window_t win = {82, 78, 636, 430, "Terminal"};
+static app_window_t win = {82, 78, 636, 430, "Terminal"};
+static app_window_drag_t drag;
 static char line[48], out[OUT_ROWS][OUT_COLS];
 static uint8_t length, last_left;
 static int current_dir;
@@ -69,7 +70,7 @@ static void list(void) {
 }
 
 static void run(char *cmd, char *arg, char *rest) {
-    if (kstrcmp(cmd, "help") == 0) print("HELP LS CD PWD CAT TOUCH MKDIR WRITE RUN CLEAR EXIT");
+    if (kstrcmp(cmd, "help") == 0) print("HELP LS CD PWD CAT TOUCH MKDIR WRITE SETTINGS RUN CLEAR EXIT");
     else if (kstrcmp(cmd, "clear") == 0) clear_output();
     else if (kstrcmp(cmd, "pwd") == 0) {
         char path[80];
@@ -94,6 +95,9 @@ static void run(char *cmd, char *arg, char *rest) {
     else if (kstrcmp(cmd, "run") == 0 && arg) {
         app_set_workdir(current_dir);
         app_run(arg, 0, 0);
+        return;
+    } else if (kstrcmp(cmd, "settings") == 0) {
+        app_run("settings", 0, 0);
         return;
     } else if (kstrcmp(cmd, "luma") == 0 || kstrcmp(cmd, "sproot") == 0 || kstrcmp(cmd, "exit") == 0) {
         app_run("luma", 0, 0);
@@ -127,6 +131,7 @@ void app_terminal_start(char **args, uint8_t count) {
     length = 0;
     line[0] = 0;
     last_left = 0;
+    drag.active = 0;
     clear_output();
     print("MINIOS SHELL - TYPE HELP");
     draw();
@@ -137,6 +142,11 @@ void app_terminal_tick(uint32_t ticks) {
     uint8_t click = mouse_left();
     if (click && !last_left && app_window_close_hit(&win, mouse_x(), mouse_y())) {
         app_run("luma", 0, 0);
+        return;
+    }
+    if (app_window_drag(&win, &drag, click, mouse_x(), mouse_y())) {
+        draw();
+        last_left = click;
         return;
     }
     last_left = click;

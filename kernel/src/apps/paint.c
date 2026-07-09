@@ -3,7 +3,8 @@
 #include "../gfx.h"
 #include "../mouse.h"
 
-static const app_window_t win = {88, 70, 624, 456, "Paint"};
+static app_window_t win = {88, 70, 624, 456, "Paint"};
+static app_window_drag_t drag;
 static uint32_t color;
 static int last_x, last_y;
 static uint8_t drawing, last_left;
@@ -53,6 +54,7 @@ void app_paint_start(char **args, uint8_t n) {
     gfx_init();
     color = 0x00000000;
     drawing = last_left = 0;
+    drag.active = 0;
     frame();
 }
 
@@ -62,6 +64,12 @@ void app_paint_tick(uint32_t t) {
     uint8_t click = mouse_left();
     if (click && !last_left && app_window_close_hit(&win, x, y)) {
         app_run("luma", 0, 0);
+        return;
+    }
+    if (app_window_drag(&win, &drag, click, x, y)) {
+        drawing = 0;
+        frame();
+        last_left = click;
         return;
     }
     if (click && y >= swatch_y() - 4 && y < swatch_y() + 28 && x >= win.x + 48 && x < win.x + 48 + 5 * 44) {

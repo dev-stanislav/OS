@@ -6,10 +6,10 @@
 #include "../libk.h"
 #include "../mouse.h"
 
-#define WIN_X 74
-#define WIN_Y 64
-#define WIN_W 652
-#define WIN_H 470
+#define WIN_X (window.x)
+#define WIN_Y (window.y)
+#define WIN_W (window.w)
+#define WIN_H (window.h)
 #define GRID_X (WIN_X + 30)
 #define GRID_Y (WIN_Y + 126)
 #define TILE_W 148
@@ -20,21 +20,22 @@
 #define NO_BUTTON 255
 
 typedef struct {
-    int x;
-    int y;
+    int dx;
+    int dy;
     int w;
     const char *label;
 } toolbar_button_t;
 
 static const toolbar_button_t buttons[] = {
-    {WIN_X + 28, WIN_Y + 58, 62, "Back"},
-    {WIN_X + 98, WIN_Y + 58, 62, "Open"},
-    {WIN_X + 168, WIN_Y + 58, 110, "New Folder"},
-    {WIN_X + 286, WIN_Y + 58, 94, "New File"},
-    {WIN_X + 388, WIN_Y + 58, 82, "Rename"},
+    {28, 58, 62, "Back"},
+    {98, 58, 62, "Open"},
+    {168, 58, 110, "New Folder"},
+    {286, 58, 94, "New File"},
+    {388, 58, 82, "Rename"},
 };
 
-static const app_window_t window = {WIN_X, WIN_Y, WIN_W, WIN_H, "File Manager"};
+static app_window_t window = {74, 64, 652, 470, "File Manager"};
+static app_window_drag_t drag;
 static int directory;
 static int entries[FS_MAX_NODES];
 static uint8_t count;
@@ -110,9 +111,10 @@ static void select_name(const char *name) {
 
 static void draw_button(uint8_t index, uint8_t active) {
     const toolbar_button_t *button = &buttons[index];
-    gfx_rect(button->x, button->y, button->w, 26, active ? 0x00D8E9FF : 0x00EAF1F8);
-    gfx_border(button->x, button->y, button->w, 26, active ? 0x000078FF : 0x00C7D3DF);
-    gfx_text_bold(button->x + 10, button->y + 10, button->label, active ? 0x000078FF : 0x00242A35);
+    int x = WIN_X + button->dx, y = WIN_Y + button->dy;
+    gfx_rect(x, y, button->w, 26, active ? 0x00D8E9FF : 0x00EAF1F8);
+    gfx_border(x, y, button->w, 26, active ? 0x000078FF : 0x00C7D3DF);
+    gfx_text_bold(x + 10, y + 10, button->label, active ? 0x000078FF : 0x00242A35);
 }
 
 static void folder_icon(int x, int y) {
@@ -206,7 +208,8 @@ static void draw(void) {
 static uint8_t button_at(int x, int y) {
     for (uint8_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++) {
         const toolbar_button_t *button = &buttons[i];
-        if (x >= button->x && x < button->x + button->w && y >= button->y && y < button->y + 26) return i;
+        int bx = WIN_X + button->dx, by = WIN_Y + button->dy;
+        if (x >= bx && x < bx + button->w && y >= by && y < by + 26) return i;
     }
     return NO_BUTTON;
 }
@@ -353,6 +356,7 @@ void app_tbf_start(char **args, uint8_t n) {
     selected = 0;
     view_start = 0;
     last_left = 0;
+    drag.active = 0;
     rename_active = 0;
     set_notice("Ready", 0x00B8C0CC);
     refresh();
@@ -362,15 +366,20 @@ void app_tbf_start(char **args, uint8_t n) {
 void app_tbf_tick(uint32_t ticks) {
     (void)ticks;
     uint8_t click = mouse_left();
+    int x = mouse_x();
+    int y = mouse_y();
+    if (click && !last_left && app_window_close_hit(&window, x, y)) {
+        app_run("luma", 0, 0);
+        return;
+    }
+    if (app_window_drag(&window, &drag, click, x, y)) {
+        draw();
+        last_left = click;
+        return;
+    }
     if (click && !last_left) {
-        int x = mouse_x();
-        int y = mouse_y();
         uint8_t button;
         uint8_t item;
-        if (app_window_close_hit(&window, x, y)) {
-            app_run("luma", 0, 0);
-            return;
-        }
         if (!rename_active) {
             button = button_at(x, y);
             if (button != NO_BUTTON) {

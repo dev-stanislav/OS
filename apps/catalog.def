@@ -8,5 +8,6 @@ PACKAGE(mines, "MiniMines", "1.0", "8x8 minesweeper", app_mines_start, app_mines
 PACKAGE(free, "Text Editor", "2.0", "Luma text editor", app_free_start, app_free_key, app_free_tick)
 PACKAGE(tbf, "File Manager", "2.1", "Dark Luma file manager", app_tbf_start, app_tbf_key, app_tbf_tick)
 PACKAGE(paint, "Paint", "1.0", "Canvas drawing with the left mouse button", app_paint_start, app_paint_key, app_paint_tick)
+PACKAGE(settings, "Settings", "1.0", "Luma desktop settings", app_settings_start, app_settings_key, app_settings_tick)
 PACKAGE(terminal, "Terminal", "1.0", "Graphical command terminal", app_terminal_start, app_terminal_key, app_terminal_tick)
 PACKAGE(luma, "Luma", "1.0", "Minimal MiniOS desktop", app_luma_start, app_luma_key, app_luma_tick)

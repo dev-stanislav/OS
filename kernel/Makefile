@@ -112,6 +112,7 @@ KERNEL_C := \
 	src/proc.c \
 	src/users.c \
 	src/apps/app_manager.c \
+	src/apps/sys_settings.c \
 	src/apps/window.c \
 	src/apps/minifetch.c \
 	src/apps/calc.c \
@@ -122,6 +123,7 @@ KERNEL_C := \
 	src/apps/free.c \
 	src/apps/tbf.c \
 	src/apps/paint.c \
+	src/apps/settings.c \
 	src/apps/terminal.c
 
 KERNEL_CPP := \

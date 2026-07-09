@@ -6,7 +6,8 @@
 #include "../libk.h"
 #include "../mouse.h"
 
-static const app_window_t win = {104, 76, 592, 438, "Text Editor"};
+static app_window_t win = {104, 76, 592, 438, "Text Editor"};
+static app_window_drag_t drag;
 static char body[FS_FILE_MAX + 1], filename[80];
 static uint16_t length;
 static const char *notice;
@@ -52,6 +53,7 @@ void app_free_start(char **args, uint8_t count) {
     }
     blink = 1;
     last_left = 0;
+    drag.active = 0;
     gfx_init();
     draw();
 }
@@ -60,6 +62,11 @@ void app_free_tick(uint32_t ticks) {
     uint8_t click = mouse_left();
     if (click && !last_left && app_window_close_hit(&win, mouse_x(), mouse_y())) {
         app_run("luma", 0, 0);
+        return;
+    }
+    if (app_window_drag(&win, &drag, click, mouse_x(), mouse_y())) {
+        draw();
+        last_left = click;
         return;
     }
     last_left = click;

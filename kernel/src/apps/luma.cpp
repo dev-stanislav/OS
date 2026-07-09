@@ -7,6 +7,7 @@ extern "C" {
 #include "../mouse.h"
 #include "../rtc.h"
 #include "../timer.h"
+#include "sys_settings.h"
 }
 
 namespace {
@@ -21,7 +22,8 @@ constexpr uint32_t AccentSoft = 0x00008F90;
 constexpr uint32_t Pink = 0x00F2487A;
 constexpr uint32_t Violet = 0x0053337C;
 constexpr uint32_t NoHover = 255;
-constexpr uint8_t ContextCount = 6;
+constexpr uint8_t ContextCount = 7;
+constexpr int ContextHeight = 16 + ContextCount * 28;
 
 struct Launcher {
     int x;
@@ -37,6 +39,7 @@ constexpr Launcher launchers[] = {
     {34, 134, "Editor", "Text Editor", "free", 1},
     {34, 206, "Paint", "Paint", "paint", 2},
     {34, 278, "Terminal", "Terminal", "terminal", 3},
+    {34, 350, "Settings", "Settings", "settings", 4},
 };
 
 constexpr uint8_t launcher_count = static_cast<uint8_t>(sizeof(launchers) / sizeof(launchers[0]));
@@ -49,7 +52,6 @@ uint8_t hover_menu;
 uint8_t hover_dock;
 uint8_t hover_context;
 uint8_t context_menu;
-uint8_t wallpaper_style;
 int context_x;
 int context_y;
 uint32_t last_clock_second;
@@ -60,6 +62,7 @@ constexpr const char *context_labels[ContextCount] = {
     "New Text Document",
     "Open Files",
     "Open Terminal",
+    "Open Settings",
     "Refresh",
     "Change Background",
 };
@@ -137,6 +140,7 @@ void stars() {
 }
 
 void wallpaper() {
+    uint8_t wallpaper_style = sys_settings_get()->wallpaper;
     uint32_t top = 0x000B344D;
     uint32_t mid = 0x002E2E68;
     uint32_t glow = 0x00F2487A;
@@ -190,10 +194,18 @@ void icon_art(int x, int y, uint8_t kind, uint8_t large) {
         gfx_rect(x + s, y + 4 * s, 9 * s, s, Pink);
         gfx_rect(x + s, y + 6 * s, 9 * s, s, Accent);
         gfx_rect(x + s, y + 8 * s, 7 * s, s, Violet);
-    } else {
+    } else if (kind == 3) {
         gfx_rect(x, y + 2 * s, 11 * s, 8 * s, PanelDark);
         gfx_border(x, y + 2 * s, 11 * s, 8 * s, White);
         gfx_text_bold(x + 2 * s, y + 5 * s, ">", Accent);
+    } else {
+        gfx_rect(x + 2 * s, y + 2 * s, 8 * s, 8 * s, White);
+        gfx_border(x + 2 * s, y + 2 * s, 8 * s, 8 * s, PanelDark);
+        gfx_rect(x + 5 * s, y, 2 * s, 3 * s, Accent);
+        gfx_rect(x + 5 * s, y + 9 * s, 2 * s, 3 * s, Accent);
+        gfx_rect(x, y + 5 * s, 3 * s, 2 * s, Pink);
+        gfx_rect(x + 9 * s, y + 5 * s, 3 * s, 2 * s, Pink);
+        gfx_rect(x + 5 * s, y + 5 * s, 2 * s, 2 * s, Violet);
     }
 }
 
@@ -220,7 +232,7 @@ uint8_t launcher_at(int x, int y) {
 uint8_t dock_at(int x, int y) {
     if (y < 546 || y >= 596) return NoHover;
     for (uint8_t i = 0; i < launcher_count; i++) {
-        int ix = 286 + i * 58;
+        int ix = 256 + i * 58;
         if (x >= ix && x < ix + 48) return i;
     }
     return NoHover;
@@ -232,7 +244,8 @@ uint8_t menu_at(int x, int y) {
     if (y >= 88 && y < 120) return 1;
     if (y >= 122 && y < 154) return 2;
     if (y >= 156 && y < 188) return 3;
-    if (y >= 212 && y < 244) return 4;
+    if (y >= 190 && y < 222) return 4;
+    if (y >= 246 && y < 278) return launcher_count;
     return NoHover;
 }
 
@@ -301,17 +314,17 @@ void top_panel() {
 const char *status_text() {
     if (context_menu && hover_context < ContextCount) return context_labels[hover_context];
     if (menu && hover_menu < launcher_count) return launchers[hover_menu].status;
-    if (menu && hover_menu == 4) return "Exit to Shell";
+    if (menu && hover_menu == launcher_count) return "Exit to Shell";
     if (hover_dock < launcher_count) return launchers[hover_dock].status;
     if (hover_launcher < launcher_count) return launchers[hover_launcher].status;
     return notice ? notice : "Ready";
 }
 
 void dock() {
-    gfx_rect(246, 546, 308, 50, PanelDark);
-    gfx_border(246, 546, 308, 50, PanelLight);
+    gfx_rect(226, 546, 348, 50, PanelDark);
+    gfx_border(226, 546, 348, 50, PanelLight);
     for (uint8_t i = 0; i < launcher_count; i++) {
-        int x = 286 + i * 58;
+        int x = 256 + i * 58;
         uint8_t active = hover_dock == i;
         gfx_rect(x, 552, 48, 38, active ? PanelLight : Panel);
         gfx_border(x, 552, 48, 38, active ? Accent : PanelDark);
@@ -330,16 +343,17 @@ void menu_row(int y, const char *label, uint8_t active) {
 
 void start_menu() {
     if (!menu) return;
-    gfx_rect(6, 40, 224, 216, Panel);
-    gfx_border(6, 40, 224, 216, AccentSoft);
+    gfx_rect(6, 40, 224, 252, Panel);
+    gfx_border(6, 40, 224, 252, AccentSoft);
     gfx_rect(6, 40, 224, 10, Accent);
     gfx_text_bold(18, 58, "Applications", White);
     menu_row(54, "Files", hover_menu == 0);
     menu_row(88, "Text Editor", hover_menu == 1);
     menu_row(122, "Paint", hover_menu == 2);
     menu_row(156, "Terminal", hover_menu == 3);
-    gfx_rect(14, 200, 204, 2, AccentSoft);
-    menu_row(212, "Exit", hover_menu == 4);
+    menu_row(190, "Settings", hover_menu == 4);
+    gfx_rect(14, 234, 204, 2, AccentSoft);
+    menu_row(246, "Exit", hover_menu == launcher_count);
 }
 
 void context_row(uint8_t index) {
@@ -352,8 +366,8 @@ void context_row(uint8_t index) {
 
 void context_menu_draw() {
     if (!context_menu) return;
-    gfx_rect(context_x, context_y, 220, 184, PanelDark);
-    gfx_border(context_x, context_y, 220, 184, AccentSoft);
+    gfx_rect(context_x, context_y, 220, ContextHeight, PanelDark);
+    gfx_border(context_x, context_y, 220, ContextHeight, AccentSoft);
     for (uint8_t i = 0; i < ContextCount; i++) context_row(i);
 }
 
@@ -366,9 +380,12 @@ uint8_t context_action(uint8_t index) {
     } else if (index == 3) {
         app_run("terminal", 0, 0);
         return 1;
-    } else if (index == 4) notice = "Desktop refreshed";
-    else if (index == 5) {
-        wallpaper_style = static_cast<uint8_t>((wallpaper_style + 1) % 3);
+    } else if (index == 4) {
+        app_run("settings", 0, 0);
+        return 1;
+    } else if (index == 5) notice = "Desktop refreshed";
+    else if (index == 6) {
+        sys_settings_next_wallpaper();
         notice = "Wallpaper changed";
     }
     return 0;
@@ -378,7 +395,7 @@ void open_context_menu(int x, int y) {
     context_x = x;
     context_y = y;
     if (context_x > GFX_WIDTH - 226) context_x = GFX_WIDTH - 226;
-    if (context_y > GFX_HEIGHT - 190) context_y = GFX_HEIGHT - 190;
+    if (context_y > GFX_HEIGHT - ContextHeight - 6) context_y = GFX_HEIGHT - ContextHeight - 6;
     if (context_x < 4) context_x = 4;
     if (context_y < 36) context_y = 36;
     context_menu = 1;
@@ -456,7 +473,7 @@ extern "C" void app_luma_tick(uint32_t ticks) {
             hover_menu = menu_at(x, y);
             redraw = 1;
         } else if (menu && hover_menu != NoHover) {
-            if (hover_menu == 4) {
+            if (hover_menu == launcher_count) {
                 app_exit_gui();
                 last_left = click;
                 last_right = right;
@@ -492,7 +509,7 @@ extern "C" void app_luma_key(uint16_t key) {
     if (key == 's' || key == 'S' || key == '\n' || key == ' ') {
         menu ^= 1;
         draw();
-    } else if (key >= '1' && key <= '4') {
+    } else if (key >= '1' && key <= '5') {
         launch(static_cast<uint8_t>(key - '1'));
     } else if (key == 'q' || key == 'Q') app_exit_gui();
 }
