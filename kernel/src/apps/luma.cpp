@@ -2,16 +2,13 @@ extern "C" {
 #include "app.h"
 #include "../fs.h"
 #include "../gfx.h"
-#include "../heap.h"
 #include "../io.h"
 #include "../keyboard.h"
 #include "../libk.h"
 #include "../mouse.h"
-#include "../net.h"
-#include "../proc.h"
 #include "../rtc.h"
+#include "../shell.h"
 #include "../timer.h"
-#include "../users.h"
 #include "sys_settings.h"
 }
 
@@ -410,66 +407,6 @@ void terminal_print(DesktopWindow &window, const char *text) {
         line[pos] = '\0';
         terminal_print_line(window, line);
         if (*text == '\n') text++;
-    }
-}
-
-char lower_char(char value) {
-    return value >= 'A' && value <= 'Z' ? static_cast<char>(value + ('a' - 'A')) : value;
-}
-
-uint8_t text_eq(const char *left, const char *right) {
-    while (*left && *right) {
-        if (lower_char(*left++) != lower_char(*right++)) return 0;
-    }
-    return *left == '\0' && *right == '\0';
-}
-
-void buffer_append(char *out, uint16_t capacity, const char *text) {
-    uint16_t pos = static_cast<uint16_t>(kstrlen(out));
-    if (pos >= capacity) return;
-    while (*text && pos + 1 < capacity) out[pos++] = *text++;
-    out[pos] = '\0';
-}
-
-void buffer_append_uint(char *out, uint16_t capacity, uint32_t value) {
-    char number[16];
-    kitoa(value, number, 10);
-    buffer_append(out, capacity, number);
-}
-
-void terminal_print_result(DesktopWindow &window, fs_result_t result) {
-    if (result == FS_OK) terminal_print(window, "ok");
-    else if (result == FS_NOT_FOUND) terminal_print(window, "not found");
-    else if (result == FS_EXISTS) terminal_print(window, "already exists");
-    else if (result == FS_FULL) terminal_print(window, "filesystem full");
-    else if (result == FS_NOT_DIR) terminal_print(window, "not a directory");
-    else if (result == FS_NOT_EMPTY) terminal_print(window, "directory is not empty");
-    else if (result == FS_TOO_LARGE) terminal_print(window, "file too large");
-    else terminal_print(window, "invalid path or command");
-}
-
-uint8_t terminal_parse_args(char *text, char **args, uint8_t maximum) {
-    uint8_t count = 0;
-    while (*text && count < maximum) {
-        while (*text == ' ') text++;
-        if (!*text) break;
-        args[count++] = text;
-        if (*text == '"') {
-            args[count - 1] = ++text;
-            while (*text && *text != '"') text++;
-        } else {
-            while (*text && *text != ' ') text++;
-        }
-        if (*text) *text++ = '\0';
-    }
-    return count;
-}
-
-void terminal_join_args(char **args, uint8_t start, uint8_t count, char *out, uint16_t capacity) {
-    out[0] = '\0';
-    for (uint8_t i = start; i < count; i++) {
-        if (i > start) buffer_append(out, capacity, " ");
-        buffer_append(out, capacity, args[i]);
     }
 }
 
@@ -1248,385 +1185,49 @@ void handle_window_click(uint8_t index, int x, int y) {
     else if (window.type == 4) handle_settings_click(window, x, y);
 }
 
-uint8_t terminal_parse_u16(const char *text, uint16_t *out) {
-    uint32_t value = 0;
-    if (!text || !*text) return 0;
-    while (*text) {
-        if (*text < '0' || *text > '9') return 0;
-        value = value * 10u + static_cast<uint32_t>(*text - '0');
-        if (value > 65535u) return 0;
-        text++;
-    }
-    *out = static_cast<uint16_t>(value);
+void shell_luma_write(shell_context_t *context, const char *text) {
+    terminal_print(*static_cast<DesktopWindow *>(context->user), text);
+}
+
+void shell_luma_clear(shell_context_t *context) {
+    terminal_clear(*static_cast<DesktopWindow *>(context->user));
+}
+
+uint8_t shell_luma_launch(shell_context_t *context, const char *id, char **args, uint8_t count) {
+    DesktopWindow &window = *static_cast<DesktopWindow *>(context->user);
+    (void)args;
+    (void)count;
+    if (shell_text_eq(id, "tbf") || shell_text_eq(id, "files")) open_window(0);
+    else if (shell_text_eq(id, "free") || shell_text_eq(id, "editor") || shell_text_eq(id, "edit")) open_window(1);
+    else if (shell_text_eq(id, "paint")) open_window(2);
+    else if (shell_text_eq(id, "terminal")) open_window(3);
+    else if (shell_text_eq(id, "settings")) open_window(4);
+    else if (shell_text_eq(id, "luma") || shell_text_eq(id, "sproot")) terminal_print(window, "already in Luma");
+    else terminal_print(window, "this app opens from main shell only");
     return 1;
 }
 
-uint8_t terminal_parse_octal(const char *text, uint16_t *out) {
-    uint16_t value = 0;
-    if (!text || !*text) return 0;
-    while (*text) {
-        if (*text < '0' || *text > '7') return 0;
-        value = static_cast<uint16_t>(value * 8u + static_cast<uint16_t>(*text - '0'));
-        text++;
-    }
-    *out = value;
-    return 1;
-}
-
-void terminal_mode_text(uint16_t mode, char *out) {
-    out[0] = static_cast<char>('0' + ((mode >> 6) & 7));
-    out[1] = static_cast<char>('0' + ((mode >> 3) & 7));
-    out[2] = static_cast<char>('0' + (mode & 7));
-    out[3] = '\0';
-}
-
-void terminal_timezone_text(char *out) {
-    int16_t timezone = rtc_timezone_minutes();
-    uint16_t absolute = timezone < 0 ? static_cast<uint16_t>(-timezone) : static_cast<uint16_t>(timezone);
-    out[0] = 'U';
-    out[1] = 'T';
-    out[2] = 'C';
-    out[3] = timezone < 0 ? '-' : '+';
-    out[4] = static_cast<char>('0' + (absolute / 60u) / 10u);
-    out[5] = static_cast<char>('0' + (absolute / 60u) % 10u);
-    out[6] = ':';
-    out[7] = static_cast<char>('0' + (absolute % 60u) / 10u);
-    out[8] = static_cast<char>('0' + (absolute % 60u) % 10u);
-    out[9] = '\0';
-}
-
-void terminal_print_node(DesktopWindow &window, const fs_node_t *node, uint8_t long_format) {
-    char line[TerminalCols];
-    char mode[4];
-    if (!node) return;
-    line[0] = '\0';
-    if (long_format) {
-        terminal_mode_text(node->mode, mode);
-        buffer_append(line, sizeof(line), node->type == FS_DIR ? "d " : "f ");
-        buffer_append(line, sizeof(line), mode);
-        buffer_append(line, sizeof(line), " ");
-        buffer_append_uint(line, sizeof(line), node->size);
-        buffer_append(line, sizeof(line), " ");
-        buffer_append(line, sizeof(line), node->name);
-    } else {
-        buffer_append(line, sizeof(line), node->type == FS_DIR ? "[dir]  " : "[file] ");
-        buffer_append(line, sizeof(line), node->name);
-    }
-    terminal_print(window, line);
-}
-
-void terminal_command_help(DesktopWindow &window) {
-    terminal_print(window, "system: help clear about uname uptime mem minifetch");
-    terminal_print(window, "files:  pwd ls [-l] cd mkdir rmdir touch cat");
-    terminal_print(window, "files:  write append cp mv rename rm stat df");
-    terminal_print(window, "apps:   run files editor paint terminal settings exit");
-    terminal_print(window, "proc:   ps jobs bg APP kill PID");
-    terminal_print(window, "net:    net info | net ping [ip]");
-}
-
-void terminal_command_minifetch(DesktopWindow &window) {
-    char line[TerminalCols];
-    char time[9];
-    char zone[10];
-    clock_text(time);
-    terminal_timezone_text(zone);
-    terminal_print(window, "MiniOS i686 / Luma Desktop");
-    terminal_print(window, "Kernel: protected mode experimental");
-    terminal_print(window, "Terminal: Luma GUI shell");
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Files: ");
-    buffer_append_uint(line, sizeof(line), fs_used_count());
-    buffer_append(line, sizeof(line), "/32 nodes");
-    terminal_print(window, line);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Uptime: ");
-    buffer_append_uint(line, sizeof(line), timer_ticks() / TIMER_HZ);
-    buffer_append(line, sizeof(line), " seconds");
-    terminal_print(window, line);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Time: ");
-    buffer_append(line, sizeof(line), time);
-    buffer_append(line, sizeof(line), " ");
-    buffer_append(line, sizeof(line), zone);
-    terminal_print(window, line);
-}
-
-void terminal_command_mem(DesktopWindow &window) {
-    char line[TerminalCols];
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Disk FS nodes: ");
-    buffer_append_uint(line, sizeof(line), fs_used_count());
-    buffer_append(line, sizeof(line), "/32");
-    terminal_print(window, line);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Disk FS data: ");
-    buffer_append_uint(line, sizeof(line), fs_used_bytes());
-    buffer_append(line, sizeof(line), "/");
-    buffer_append_uint(line, sizeof(line), fs_capacity_bytes());
-    buffer_append(line, sizeof(line), " bytes");
-    terminal_print(window, line);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Kernel heap: ");
-    buffer_append_uint(line, sizeof(line), heap_used());
-    buffer_append(line, sizeof(line), "/");
-    buffer_append_uint(line, sizeof(line), heap_capacity());
-    buffer_append(line, sizeof(line), " bytes");
-    terminal_print(window, line);
-}
-
-void terminal_command_time(DesktopWindow &window) {
-    char line[TerminalCols];
-    char time[9];
-    char zone[10];
-    clock_text(time);
-    terminal_timezone_text(zone);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Local: ");
-    buffer_append(line, sizeof(line), time);
-    buffer_append(line, sizeof(line), " ");
-    buffer_append(line, sizeof(line), zone);
-    terminal_print(window, line);
-    terminal_print(window, rtc_ready() ? "RTC: ready" : "RTC: unavailable");
-}
-
-void terminal_command_ls(DesktopWindow &window, char **args, uint8_t count) {
-    uint8_t long_format = count > 1 && text_eq(args[1], "-l");
-    const char *path = long_format ? (count > 2 ? args[2] : ".") : (count > 1 ? args[1] : ".");
-    int index = fs_resolve(path, window.directory);
-    const fs_node_t *node = fs_node(index);
-    uint8_t found = 0;
-    if (!node) {
-        terminal_print(window, "not found");
-        return;
-    }
-    if (node->type != FS_DIR) {
-        terminal_print_node(window, node, long_format);
-        return;
-    }
-    if (long_format) terminal_print(window, "T MODE SIZE NAME");
-    for (int i = 0; i < FS_MAX_NODES; i++) {
-        const fs_node_t *child = fs_node(i);
-        if (child && child->parent == index) {
-            terminal_print_node(window, child, long_format);
-            found = 1;
-        }
-    }
-    if (!found) terminal_print(window, "empty");
-}
-
-void terminal_command_stat(DesktopWindow &window, const char *path) {
-    int index = fs_resolve(path, window.directory);
-    const fs_node_t *node = fs_node(index);
-    char line[TerminalCols];
-    char mode[4];
-    char full_path[80];
-    if (!node) {
-        terminal_print(window, "not found");
-        return;
-    }
-    fs_path(index, full_path, sizeof(full_path));
-    terminal_mode_text(node->mode, mode);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Path: ");
-    buffer_append(line, sizeof(line), full_path);
-    terminal_print(window, line);
-    terminal_print(window, node->type == FS_DIR ? "Type: directory" : "Type: file");
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Size: ");
-    buffer_append_uint(line, sizeof(line), node->size);
-    buffer_append(line, sizeof(line), " bytes");
-    terminal_print(window, line);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Mode: ");
-    buffer_append(line, sizeof(line), mode);
-    terminal_print(window, line);
-}
-
-void terminal_command_df(DesktopWindow &window) {
-    char line[TerminalCols];
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Nodes: ");
-    buffer_append_uint(line, sizeof(line), fs_used_count());
-    buffer_append(line, sizeof(line), "/");
-    buffer_append_uint(line, sizeof(line), FS_MAX_NODES);
-    buffer_append(line, sizeof(line), " used");
-    terminal_print(window, line);
-    line[0] = '\0';
-    buffer_append(line, sizeof(line), "Data: ");
-    buffer_append_uint(line, sizeof(line), fs_used_bytes());
-    buffer_append(line, sizeof(line), "/");
-    buffer_append_uint(line, sizeof(line), fs_capacity_bytes());
-    buffer_append(line, sizeof(line), " bytes used");
-    terminal_print(window, line);
-}
-
-void terminal_command_ps(DesktopWindow &window) {
-    proc_info_t list[12];
-    uint8_t count = proc_snapshot(list, static_cast<uint8_t>(sizeof(list) / sizeof(list[0])));
-    uint32_t now = timer_ticks();
-    terminal_print(window, "PID TIME NAME");
-    for (uint8_t i = 0; i < count; i++) {
-        char line[TerminalCols];
-        line[0] = '\0';
-        buffer_append_uint(line, sizeof(line), list[i].pid);
-        buffer_append(line, sizeof(line), " ");
-        buffer_append_uint(line, sizeof(line), (now - list[i].started_ticks) / TIMER_HZ);
-        buffer_append(line, sizeof(line), "s ");
-        buffer_append(line, sizeof(line), list[i].is_protected ? "*" : "");
-        buffer_append(line, sizeof(line), list[i].name);
-        terminal_print(window, line);
-    }
-}
-
-uint8_t terminal_open_luma_app(DesktopWindow &window, const char *id) {
-    if (text_eq(id, "files") || text_eq(id, "tbf")) open_window(0);
-    else if (text_eq(id, "editor") || text_eq(id, "edit") || text_eq(id, "free")) open_window(1);
-    else if (text_eq(id, "paint")) open_window(2);
-    else if (text_eq(id, "terminal")) open_window(3);
-    else if (text_eq(id, "settings")) open_window(4);
-    else if (text_eq(id, "luma") || text_eq(id, "sproot")) terminal_print(window, "already in Luma");
-    else if (text_eq(id, "minifetch") || text_eq(id, "neofetch")) terminal_command_minifetch(window);
-    else return 0;
-    return 1;
-}
-
-void terminal_command_run(DesktopWindow &window, char **args, uint8_t count) {
-    if (count < 2) {
-        terminal_print(window, "usage: run APP");
-        return;
-    }
-    if (terminal_open_luma_app(window, args[1])) return;
-    terminal_print(window, "this app opens from main shell only");
+void shell_luma_reboot(shell_context_t *context) {
+    (void)context;
+    outb(0x64, 0xFE);
 }
 
 void execute_terminal(DesktopWindow &window, const char *command) {
-    char copy[80];
-    char *args[8];
-    char text[80];
-    uint8_t count;
+    char copy[sizeof(window.line)];
+    shell_context_t shell;
+    shell_result_t result;
     if (!command || !*command) return;
+    shell.current_dir = window.directory;
+    shell.gui = 1;
+    shell.user = &window;
+    shell.write = shell_luma_write;
+    shell.clear = shell_luma_clear;
+    shell.launch = shell_luma_launch;
+    shell.reboot = shell_luma_reboot;
     kstrcpy(copy, command, sizeof(copy));
-    count = terminal_parse_args(copy, args, static_cast<uint8_t>(sizeof(args) / sizeof(args[0])));
-    if (!count) return;
-
-    if (text_eq(args[0], "help")) terminal_command_help(window);
-    else if (text_eq(args[0], "clear")) terminal_clear(window);
-    else if (text_eq(args[0], "about") || text_eq(args[0], "uname")) terminal_print(window, "MiniOS i686 v1 experimental kernel");
-    else if (text_eq(args[0], "uptime")) {
-        char line[TerminalCols];
-        line[0] = '\0';
-        buffer_append(line, sizeof(line), "uptime: ");
-        buffer_append_uint(line, sizeof(line), timer_ticks() / TIMER_HZ);
-        buffer_append(line, sizeof(line), " s");
-        terminal_print(window, line);
-    } else if (text_eq(args[0], "mem")) terminal_command_mem(window);
-    else if (text_eq(args[0], "minifetch") || text_eq(args[0], "neofetch")) terminal_command_minifetch(window);
-    else if (text_eq(args[0], "system") || text_eq(args[0], "date")) terminal_command_time(window);
-    else if (text_eq(args[0], "whoami")) {
-        char line[TerminalCols];
-        line[0] = '\0';
-        buffer_append(line, sizeof(line), users_current_name());
-        buffer_append(line, sizeof(line), " (");
-        buffer_append(line, sizeof(line), users_current_role());
-        buffer_append(line, sizeof(line), ")");
-        terminal_print(window, line);
-    } else if (text_eq(args[0], "pwd")) {
-        char path[80];
-        fs_path(window.directory, path, sizeof(path));
-        terminal_print(window, path);
-    } else if (text_eq(args[0], "ls")) terminal_command_ls(window, args, count);
-    else if (text_eq(args[0], "cd")) {
-        int target = fs_resolve(count > 1 ? args[1] : "/", window.directory);
-        const fs_node_t *node = fs_node(target);
-        if (node && node->type == FS_DIR) {
-            window.directory = target;
-            terminal_print(window, "ok");
-        } else terminal_print(window, "directory not found");
-    } else if (text_eq(args[0], "mkdir") && count > 1) terminal_print_result(window, fs_create(args[1], FS_DIR, window.directory));
-    else if (text_eq(args[0], "touch") && count > 1) {
-        fs_result_t result = fs_create(args[1], FS_FILE, window.directory);
-        terminal_print_result(window, result == FS_EXISTS ? FS_OK : result);
-    } else if (text_eq(args[0], "cat") && count > 1) {
-        int index = fs_resolve(args[1], window.directory);
-        const fs_node_t *node = fs_node(index);
-        if (node && node->type == FS_FILE && fs_can_read(index)) terminal_print(window, node->data);
-        else terminal_print(window, "file not found or permission denied");
-    } else if (text_eq(args[0], "write") && count > 1) {
-        terminal_join_args(args, 2, count, text, sizeof(text));
-        terminal_print_result(window, fs_write(args[1], text, window.directory));
-    } else if (text_eq(args[0], "append") && count > 2) {
-        terminal_join_args(args, 2, count, text, sizeof(text));
-        terminal_print_result(window, fs_append(args[1], text, window.directory));
-    } else if (text_eq(args[0], "cp") && count > 2) terminal_print_result(window, fs_copy(args[1], args[2], window.directory));
-    else if ((text_eq(args[0], "mv") || text_eq(args[0], "rename")) && count > 2) terminal_print_result(window, fs_move(args[1], args[2], window.directory));
-    else if (text_eq(args[0], "stat") && count > 1) terminal_command_stat(window, args[1]);
-    else if (text_eq(args[0], "df")) terminal_command_df(window);
-    else if (text_eq(args[0], "rm") && count > 1) terminal_print_result(window, fs_remove(args[1], window.directory, 0));
-    else if (text_eq(args[0], "rmdir") && count > 1) terminal_print_result(window, fs_remove(args[1], window.directory, 1));
-    else if (text_eq(args[0], "chmod") && count > 2) {
-        uint16_t mode;
-        if (!terminal_parse_octal(args[1], &mode)) terminal_print(window, "usage: chmod 644 file");
-        else {
-            fs_chmod(args[2], mode, window.directory);
-            terminal_print(window, "ok");
-        }
-    } else if (text_eq(args[0], "chown") && count > 2) {
-        int uid = users_find_uid(args[1]);
-        if (uid < 0) terminal_print(window, "user not found");
-        else if (!users_is_root()) terminal_print(window, "only root can chown");
-        else {
-            fs_chown(args[2], static_cast<uint8_t>(uid), window.directory);
-            terminal_print(window, "ok");
-        }
-    } else if (text_eq(args[0], "user") && count > 2 && text_eq(args[1], "login")) {
-        if (users_login(args[2])) {
-            window.directory = fs_resolve(users_current_home(), fs_root());
-            terminal_print(window, "logged in");
-        } else terminal_print(window, "user not found");
-    } else if (text_eq(args[0], "ps") || text_eq(args[0], "jobs")) terminal_command_ps(window);
-    else if (text_eq(args[0], "bg") && count > 1) {
-        uint16_t pid = proc_spawn(args[1]);
-        if (!pid) terminal_print(window, "process table full");
-        else {
-            char line[TerminalCols];
-            line[0] = '\0';
-            buffer_append(line, sizeof(line), "[");
-            buffer_append_uint(line, sizeof(line), pid);
-            buffer_append(line, sizeof(line), "] ");
-            buffer_append(line, sizeof(line), args[1]);
-            buffer_append(line, sizeof(line), " started");
-            terminal_print(window, line);
-        }
-    } else if (text_eq(args[0], "kill") && count > 1) {
-        uint16_t pid;
-        if (!terminal_parse_u16(args[1], &pid)) terminal_print(window, "usage: kill PID");
-        else {
-            proc_result_t result = proc_kill(pid);
-            if (result == PROC_RESULT_OK) terminal_print(window, "process killed");
-            else if (result == PROC_RESULT_PROTECTED) terminal_print(window, "cannot kill system process");
-            else terminal_print(window, "process not found");
-        }
-    } else if (text_eq(args[0], "net") && count > 1 && text_eq(args[1], "info")) {
-        if (!net_ready()) terminal_print(window, "network: RTL8139 not found");
-        else if (net_ping_ok()) terminal_print(window, "network: online, gateway ping replied");
-        else if (net_gateway_known()) terminal_print(window, "network: gateway resolved, ping pending");
-        else terminal_print(window, "network: adapter ready, resolving gateway");
-    } else if (text_eq(args[0], "net") && count > 1 && text_eq(args[1], "ping")) {
-        if (count > 2) {
-            terminal_print(window, net_ping_ip(args[2]) ? "ping sent; use net info" : "usage: net ping 8.8.8.8");
-        } else {
-            net_ping_gateway();
-            terminal_print(window, "ping sent to 10.0.2.2; use net info");
-        }
-    } else if (text_eq(args[0], "run")) terminal_command_run(window, args, count);
-    else if (terminal_open_luma_app(window, args[0])) return;
-    else if (text_eq(args[0], "exit")) close_window(active_window);
-    else if (text_eq(args[0], "reboot")) {
-        terminal_print(window, "rebooting...");
-        outb(0x64, 0xFE);
-    } else if (text_eq(args[0], "fetch") || text_eq(args[0], "minipkg") || text_eq(args[0], "debug")) {
-        terminal_print(window, "this command is available in main shell");
-    } else terminal_print(window, "unknown command; type help");
+    result = shell_execute(&shell, copy);
+    window.directory = shell.current_dir;
+    if (result == SHELL_RESULT_EXIT) close_window(active_window);
 }
 
 void handle_files_key(DesktopWindow &window, uint16_t key) {

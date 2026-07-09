@@ -100,6 +100,7 @@ KERNEL_C := \
 	src/percpu.c \
 	src/keyboard.c \
 	src/console.c \
+	src/shell.c \
 	src/timer.c \
 	src/libk.c \
 	src/bearssl_os.c \
