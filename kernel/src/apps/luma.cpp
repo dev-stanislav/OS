@@ -45,6 +45,8 @@ constexpr Launcher launchers[] = {
 constexpr uint8_t launcher_count = static_cast<uint8_t>(sizeof(launchers) / sizeof(launchers[0]));
 constexpr uint8_t MaxWindows = 8;
 constexpr uint8_t NoWindow = 255;
+constexpr uint8_t FileVisibleRows = 7;
+constexpr uint8_t FileButtonCount = 6;
 constexpr uint8_t TerminalRows = 5;
 constexpr uint8_t TerminalCols = 58;
 constexpr uint8_t PaintCols = 80;
@@ -60,6 +62,21 @@ constexpr uint32_t PaintPalette[PaintColorCount] = {
     0x00FFCC00,
 };
 
+struct FileButton {
+    int dx;
+    int w;
+    const char *label;
+};
+
+constexpr FileButton FileButtons[FileButtonCount] = {
+    {24, 48, "Back"},
+    {78, 48, "Open"},
+    {132, 72, "New Dir"},
+    {210, 72, "New Txt"},
+    {288, 66, "Rename"},
+    {360, 58, "Delete"},
+};
+
 struct DesktopWindow {
     uint8_t type;
     int x;
@@ -69,13 +86,19 @@ struct DesktopWindow {
     int drag_x;
     int drag_y;
     int directory;
+    int file_index;
     uint8_t selected;
+    uint8_t view_start;
+    uint8_t rename_active;
     uint8_t line_len;
+    uint16_t editor_len;
     uint8_t paint_color;
     uint8_t painting;
     int paint_last_col;
     int paint_last_row;
+    char title[FS_NAME_MAX + 1];
     char line[48];
+    char editor[FS_FILE_MAX + 1];
     char output[TerminalRows][TerminalCols];
     uint8_t paint[PaintRows][PaintCols];
 };
@@ -347,16 +370,22 @@ void window_defaults(DesktopWindow &window, uint8_t type) {
     window.y = 86 + offset;
     window.drag_x = window.drag_y = 0;
     window.directory = app_get_workdir();
+    window.file_index = -1;
     window.selected = 0;
+    window.view_start = 0;
+    window.rename_active = 0;
     window.line_len = 0;
+    window.editor_len = 0;
     window.paint_color = 0;
     window.painting = 0;
     window.paint_last_col = 0;
     window.paint_last_row = 0;
+    kstrcpy(window.title, type == 1 ? "untitled.txt" : window_title(type), sizeof(window.title));
     window.line[0] = '\0';
+    window.editor[0] = '\0';
     terminal_clear(window);
     paint_clear(window);
-    if (type == 0) { window.w = 480; window.h = 330; }
+    if (type == 0) { window.w = 540; window.h = 360; }
     else if (type == 1) { window.w = 438; window.h = 306; }
     else if (type == 2) { window.w = 404; window.h = 318; }
     else if (type == 3) {
@@ -389,15 +418,34 @@ void close_window(uint8_t index) {
     notice = window_count ? "Window closed" : "Ready";
 }
 
-void open_window(uint8_t type) {
-    if (type >= launcher_count) return;
+uint8_t open_window(uint8_t type) {
+    if (type >= launcher_count) return NoWindow;
     if (window_count >= MaxWindows) {
         notice = "Too many windows";
-        return;
+        return NoWindow;
     }
     window_defaults(windows[window_count], type);
     active_window = window_count++;
     notice = launchers[type].status;
+    return active_window;
+}
+
+void open_editor_file(uint8_t node_index) {
+    const fs_node_t *node = fs_node(node_index);
+    if (!node || node->type != FS_FILE) {
+        notice = "Cannot open file";
+        return;
+    }
+    uint8_t index = open_window(1);
+    if (index == NoWindow) return;
+    DesktopWindow &editor = windows[index];
+    editor.file_index = node_index;
+    editor.directory = node->parent;
+    editor.editor_len = node->size;
+    kstrcpy(editor.title, node->name, sizeof(editor.title));
+    kmemcpy(editor.editor, node->data, editor.editor_len);
+    editor.editor[editor.editor_len] = '\0';
+    notice = "File opened";
 }
 
 void launch(uint8_t index) {
@@ -415,13 +463,16 @@ void make_candidate(char *out, const char *base, const char *ext, uint8_t number
     append_text(out, FS_NAME_MAX + 1, ext);
 }
 
-void unique_name(char *out, const char *base, const char *ext) {
-    int cwd = app_get_workdir();
+void unique_name_in(char *out, const char *base, const char *ext, int directory) {
     for (uint8_t number = 1; number < 99; number++) {
         make_candidate(out, base, ext, number);
-        if (fs_resolve(out, cwd) < 0) return;
+        if (fs_resolve(out, directory) < 0) return;
     }
     make_candidate(out, base, ext, 99);
+}
+
+void unique_name(char *out, const char *base, const char *ext) {
+    unique_name_in(out, base, ext, app_get_workdir());
 }
 
 void create_desktop_item(uint8_t folder) {
@@ -555,33 +606,105 @@ void window_frame(const DesktopWindow &window, uint8_t active) {
     gfx_text_bold(window.x + window.w / 2 - 42, window.y + 11, window_title(window.type), 0x00D7DAE4);
 }
 
+uint8_t files_count(const DesktopWindow &window) {
+    uint8_t count = 0;
+    for (int index = 0; index < FS_MAX_NODES; index++) {
+        const fs_node_t *node = fs_node(index);
+        if (node && node->parent == window.directory) count++;
+    }
+    return count;
+}
+
+uint8_t file_child_by_index(const DesktopWindow &window, uint8_t wanted) {
+    uint8_t row = 0;
+    for (int index = 0; index < FS_MAX_NODES; index++) {
+        const fs_node_t *node = fs_node(index);
+        if (!node || node->parent != window.directory) continue;
+        if (row == wanted) return static_cast<uint8_t>(index);
+        row++;
+    }
+    return NoWindow;
+}
+
+void ensure_files_visible(DesktopWindow &window) {
+    uint8_t count = files_count(window);
+    if (!count) {
+        window.selected = 0;
+        window.view_start = 0;
+        return;
+    }
+    if (window.selected >= count) window.selected = static_cast<uint8_t>(count - 1);
+    if (window.selected < window.view_start) window.view_start = window.selected;
+    if (window.selected >= window.view_start + FileVisibleRows) {
+        window.view_start = static_cast<uint8_t>(window.selected - FileVisibleRows + 1);
+    }
+}
+
+void draw_file_button(const DesktopWindow &window, uint8_t index) {
+    const FileButton &button = FileButtons[index];
+    int x = window.x + button.dx;
+    int y = window.y + 42;
+    gfx_rect(x, y, button.w, 24, 0x00242633);
+    gfx_border(x, y, button.w, 24, 0x004A5060);
+    gfx_text_bold(x + 8, y + 9, button.label, 0x00D7DAE4);
+}
+
 void draw_files_window(DesktopWindow &window) {
     char path[80];
     fs_path(window.directory, path, sizeof(path));
-    gfx_rect(window.x + 14, window.y + 42, window.w - 28, 24, 0x00242633);
-    gfx_border(window.x + 14, window.y + 42, window.w - 28, 24, 0x004A5060);
-    gfx_text_bold(window.x + 24, window.y + 51, path, Accent);
-    gfx_rect(window.x + 14, window.y + 76, window.w - 28, window.h - 92, 0x001F2230);
-    gfx_border(window.x + 14, window.y + 76, window.w - 28, window.h - 92, 0x004A5060);
-    uint8_t row = 0;
-    for (int index = 0; index < FS_MAX_NODES && row < 8; index++) {
-        const fs_node_t *node = fs_node(index);
-        if (!node || node->parent != window.directory) continue;
-        int y = window.y + 92 + row * 24;
-        if (row == window.selected) gfx_rect(window.x + 22, y - 5, window.w - 44, 20, 0x00324D6B);
+    ensure_files_visible(window);
+    for (uint8_t i = 0; i < FileButtonCount; i++) draw_file_button(window, i);
+    gfx_rect(window.x + 14, window.y + 74, window.w - 28, 24, 0x00242633);
+    gfx_border(window.x + 14, window.y + 74, window.w - 28, 24, 0x004A5060);
+    gfx_text_bold(window.x + 24, window.y + 83, path, Accent);
+    gfx_rect(window.x + 14, window.y + 108, window.w - 28, 178, 0x001F2230);
+    gfx_border(window.x + 14, window.y + 108, window.w - 28, 178, 0x004A5060);
+
+    uint8_t count = files_count(window);
+    uint8_t visible = count > window.view_start ? static_cast<uint8_t>(count - window.view_start) : 0;
+    if (visible > FileVisibleRows) visible = FileVisibleRows;
+    for (uint8_t row = 0; row < visible; row++) {
+        uint8_t absolute = static_cast<uint8_t>(window.view_start + row);
+        uint8_t child = file_child_by_index(window, absolute);
+        const fs_node_t *node = fs_node(child);
+        if (!node) continue;
+        int y = window.y + 124 + row * 24;
+        if (absolute == window.selected) gfx_rect(window.x + 22, y - 5, window.w - 44, 20, 0x00324D6B);
         gfx_text_bold(window.x + 28, y, node->type == FS_DIR ? "[DIR]" : "[FILE]", node->type == FS_DIR ? 0x0000D6D6 : 0x00FFFFFF);
         gfx_text_bold(window.x + 86, y, node->name, 0x00FFFFFF);
-        row++;
     }
-    if (!row) gfx_text_bold(window.x + 170, window.y + 190, "Empty Folder", 0x008A94A8);
+    if (!count) gfx_text_bold(window.x + 204, window.y + 190, "Empty Folder", 0x008A94A8);
+    gfx_rect(window.x + 14, window.y + window.h - 42, window.w - 28, 26, 0x00242633);
+    gfx_border(window.x + 14, window.y + window.h - 42, window.w - 28, 26, 0x004A5060);
+    if (window.rename_active) {
+        gfx_text_bold(window.x + 24, window.y + window.h - 32, "Rename:", Accent);
+        gfx_text_bold(window.x + 94, window.y + window.h - 32, window.line, White);
+        gfx_text_bold(window.x + window.w - 148, window.y + window.h - 32, "Enter OK", 0x008A94A8);
+    } else {
+        gfx_text_bold(window.x + 24, window.y + window.h - 32, notice ? notice : "Ready", White);
+        gfx_text_bold(window.x + window.w - 202, window.y + window.h - 32, "Enter Open  Del Delete", 0x008A94A8);
+    }
 }
 
 void draw_editor_window(const DesktopWindow &window) {
     gfx_rect(window.x + 16, window.y + 48, window.w - 32, window.h - 70, 0x00F5F7FB);
     gfx_border(window.x + 16, window.y + 48, window.w - 32, window.h - 70, 0x00AEB8CA);
-    gfx_text_bold(window.x + 30, window.y + 66, "untitled.txt", 0x00242A35);
-    gfx_text(window.x + 30, window.y + 96, "Multiple windows are now managed by Luma.", 0x00242A35);
-    gfx_text(window.x + 30, window.y + 114, "Open Terminal, Files and Settings together.", 0x00242A35);
+    gfx_text_bold(window.x + 30, window.y + 66, window.title, 0x00242A35);
+    int text_x = window.x + 30;
+    int x = text_x;
+    int y = window.y + 96;
+    for (uint16_t i = 0; i < window.editor_len; i++) {
+        if (window.editor[i] == '\n' || x > window.x + window.w - 38) {
+            x = text_x;
+            y += 14;
+            if (y > window.y + window.h - 48) break;
+            if (window.editor[i] == '\n') continue;
+        }
+        char text[2] = {window.editor[i], 0};
+        gfx_text(x, y, text, 0x00242A35);
+        x += 6;
+    }
+    if (!window.editor_len) gfx_text(window.x + 30, window.y + 96, "Empty file", 0x008A94A8);
 }
 
 int paint_canvas_x(const DesktopWindow &window) { return window.x + 18; }
@@ -694,34 +817,147 @@ void update_drag(int x, int y) {
 }
 
 uint8_t file_child_at(DesktopWindow &window, uint8_t wanted_row) {
-    if (wanted_row >= 8) return NoWindow;
-    uint8_t row = 0;
-    for (int index = 0; index < FS_MAX_NODES; index++) {
-        const fs_node_t *node = fs_node(index);
-        if (!node || node->parent != window.directory) continue;
-        if (row == wanted_row) return static_cast<uint8_t>(index);
-        row++;
-    }
-    return NoWindow;
+    if (wanted_row >= FileVisibleRows) return NoWindow;
+    return file_child_by_index(window, static_cast<uint8_t>(window.view_start + wanted_row));
 }
 
-void handle_files_click(DesktopWindow &window, int x, int y) {
-    if (x < window.x + 14 || x >= window.x + window.w - 14) return;
-    if (y < window.y + 86 || y >= window.y + window.h - 24) return;
-    uint8_t row = static_cast<uint8_t>((y - (window.y + 92)) / 24);
-    uint8_t child = file_child_at(window, row);
+uint8_t files_selected_child(DesktopWindow &window) {
+    ensure_files_visible(window);
+    if (!files_count(window)) return NoWindow;
+    return file_child_by_index(window, window.selected);
+}
+
+void files_select_name(DesktopWindow &window, const char *name) {
+    uint8_t count = files_count(window);
+    for (uint8_t index = 0; index < count; index++) {
+        uint8_t child = file_child_by_index(window, index);
+        const fs_node_t *node = fs_node(child);
+        if (node && kstrcmp(node->name, name) == 0) {
+            window.selected = index;
+            ensure_files_visible(window);
+            return;
+        }
+    }
+}
+
+void files_create_item(DesktopWindow &window, uint8_t folder) {
+    char name[FS_NAME_MAX + 1];
+    unique_name_in(name, folder ? "New Folder" : "New File", folder ? "" : ".txt", window.directory);
+    fs_result_t result = folder ? fs_create(name, FS_DIR, window.directory) : fs_write(name, "", window.directory);
+    if (result == FS_OK) {
+        files_select_name(window, name);
+        notice = folder ? "Folder created" : "Text file created";
+    } else notice = folder ? "Cannot create folder" : "Cannot create file";
+}
+
+void files_go_back(DesktopWindow &window) {
+    const fs_node_t *node = fs_node(window.directory);
+    if (node && node->parent >= 0) {
+        window.directory = node->parent;
+        window.selected = 0;
+        window.view_start = 0;
+        window.rename_active = 0;
+        app_set_workdir(window.directory);
+        notice = "Parent folder";
+    } else notice = "Already at root";
+}
+
+void files_open_selected(DesktopWindow &window) {
+    uint8_t child = files_selected_child(window);
     if (child == NoWindow) return;
     const fs_node_t *node = fs_node(child);
     if (!node) return;
-    window.selected = row;
     if (node->type == FS_DIR) {
         window.directory = child;
         window.selected = 0;
+        window.view_start = 0;
+        window.rename_active = 0;
+        app_set_workdir(window.directory);
         notice = "Folder opened";
-    } else {
-        open_window(1);
-        notice = "File selected";
+    } else open_editor_file(child);
+}
+
+void files_delete_selected(DesktopWindow &window) {
+    uint8_t child = files_selected_child(window);
+    if (child == NoWindow) {
+        notice = "Nothing selected";
+        return;
     }
+    const fs_node_t *node = fs_node(child);
+    if (!node) return;
+    if (fs_remove(node->name, window.directory, node->type == FS_DIR) == FS_OK) {
+        window.rename_active = 0;
+        ensure_files_visible(window);
+        notice = "Deleted";
+    } else notice = "Delete failed";
+}
+
+void files_begin_rename(DesktopWindow &window) {
+    uint8_t child = files_selected_child(window);
+    const fs_node_t *node = fs_node(child);
+    if (!node) {
+        notice = "Nothing selected";
+        return;
+    }
+    kstrcpy(window.line, node->name, sizeof(window.line));
+    window.line_len = static_cast<uint8_t>(kstrlen(window.line));
+    window.rename_active = 1;
+    notice = "Renaming";
+}
+
+void files_commit_rename(DesktopWindow &window) {
+    uint8_t child = files_selected_child(window);
+    const fs_node_t *node = fs_node(child);
+    char new_name[FS_NAME_MAX + 1];
+    if (!node || !window.line_len) {
+        window.rename_active = 0;
+        notice = "Rename cancelled";
+        return;
+    }
+    kstrcpy(new_name, window.line, sizeof(new_name));
+    if (fs_move(node->name, new_name, window.directory) == FS_OK) {
+        window.rename_active = 0;
+        files_select_name(window, new_name);
+        notice = "Renamed";
+    } else {
+        window.rename_active = 0;
+        notice = "Rename failed";
+    }
+}
+
+uint8_t files_button_at(const DesktopWindow &window, int x, int y) {
+    if (y < window.y + 42 || y >= window.y + 66) return NoHover;
+    for (uint8_t i = 0; i < FileButtonCount; i++) {
+        const FileButton &button = FileButtons[i];
+        int bx = window.x + button.dx;
+        if (x >= bx && x < bx + button.w) return i;
+    }
+    return NoHover;
+}
+
+void files_run_button(DesktopWindow &window, uint8_t button) {
+    if (button == 0) files_go_back(window);
+    else if (button == 1) files_open_selected(window);
+    else if (button == 2) files_create_item(window, 1);
+    else if (button == 3) files_create_item(window, 0);
+    else if (button == 4) files_begin_rename(window);
+    else if (button == 5) files_delete_selected(window);
+}
+
+void handle_files_click(DesktopWindow &window, int x, int y) {
+    uint8_t button = files_button_at(window, x, y);
+    if (button != NoHover) {
+        files_run_button(window, button);
+        return;
+    }
+    if (x < window.x + 14 || x >= window.x + window.w - 14) return;
+    if (y < window.y + 114 || y >= window.y + 114 + FileVisibleRows * 24) return;
+    uint8_t row = static_cast<uint8_t>((y - (window.y + 114)) / 24);
+    uint8_t child = file_child_at(window, row);
+    if (child == NoWindow) return;
+    window.selected = static_cast<uint8_t>(window.view_start + row);
+    ensure_files_visible(window);
+    notice = "Selected";
 }
 
 void handle_settings_click(const DesktopWindow &window, int x, int y) {
@@ -847,10 +1083,36 @@ void execute_terminal(DesktopWindow &window, const char *command) {
     else terminal_print(window, "unknown command");
 }
 
+void handle_files_key(DesktopWindow &window, uint16_t key) {
+    if (window.rename_active) {
+        if (key == '\n') files_commit_rename(window);
+        else if (key == '\b') {
+            if (window.line_len) window.line[--window.line_len] = '\0';
+        } else if (key >= 32 && key < 127 && key != '/' && window.line_len < FS_NAME_MAX) {
+            window.line[window.line_len++] = static_cast<char>(key);
+            window.line[window.line_len] = '\0';
+        }
+        return;
+    }
+
+    uint8_t count = files_count(window);
+    if (key == '\b') files_go_back(window);
+    else if (key == KEY_UP && count && window.selected) window.selected--;
+    else if (key == KEY_DOWN && count && window.selected + 1 < count) window.selected++;
+    else if (key == '\n') files_open_selected(window);
+    else if (key == KEY_DELETE) files_delete_selected(window);
+    else if (key == 'r' || key == 'R') files_begin_rename(window);
+    else if (key == 'f' || key == 'F') files_create_item(window, 1);
+    else if (key == 'n' || key == 'N') files_create_item(window, 0);
+    ensure_files_visible(window);
+}
+
 void handle_window_key(uint16_t key) {
     if (active_window >= window_count) return;
     DesktopWindow &window = windows[active_window];
-    if (key == '\b' && window.type == 3 && window.line_len) {
+    if (window.type == 0) {
+        handle_files_key(window, key);
+    } else if (key == '\b' && window.type == 3 && window.line_len) {
         window.line[--window.line_len] = '\0';
     } else if (key == '\n' && window.type == 3) {
         char command[48];
