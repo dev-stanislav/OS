@@ -52,11 +52,10 @@ static void draw(void) {
     swatch(x + 162, y + 40, 0x0000A86B, settings->accent == 3);
 
     y += 112;
-    row_title(x, y, "Windows", "Drag title bars to move apps");
-    gfx_rect(x, y + 42, 254, 50, 0x00FFFFFF);
-    gfx_border(x, y + 42, 254, 50, 0x00D1DDE8);
-    gfx_text_bold(x + 14, y + 56, "Floating app windows", 0x00242A35);
-    gfx_text_bold(x + 14, y + 74, "Close with red X", 0x00607082);
+    row_title(x, y, "Font", "System text style");
+    button(x, y + 36, 76, "Pixel", settings->font == 0);
+    button(x + 86, y + 36, 76, "Clean", settings->font == 1);
+    button(x + 172, y + 36, 72, "Bold", settings->font == 2);
 
     gfx_rect(win.x + 34, win.y + win.h - 42, win.w - 68, 24, 0x00EAF1F8);
     gfx_border(win.x + 34, win.y + win.h - 42, win.w - 68, 24, 0x00D1DDE8);
@@ -100,6 +99,9 @@ void app_settings_tick(uint32_t ticks) {
         else if (hit(mx, my, x + 51, y + 141, 40, 32)) { sys_settings_set_accent(1); notice = "Accent Cyan"; draw(); }
         else if (hit(mx, my, x + 105, y + 141, 40, 32)) { sys_settings_set_accent(2); notice = "Accent Pink"; draw(); }
         else if (hit(mx, my, x + 159, y + 141, 40, 32)) { sys_settings_set_accent(3); notice = "Accent Green"; draw(); }
+        else if (hit(mx, my, x, y + 252, 76, 28)) { sys_settings_set_font(0); notice = "Font Pixel"; draw(); }
+        else if (hit(mx, my, x + 86, y + 252, 76, 28)) { sys_settings_set_font(1); notice = "Font Clean"; draw(); }
+        else if (hit(mx, my, x + 172, y + 252, 72, 28)) { sys_settings_set_font(2); notice = "Font Bold"; draw(); }
     }
     last_left = click;
 }
@@ -112,6 +114,14 @@ void app_settings_key(uint16_t key) {
     } else if (key >= '4' && key <= '7') {
         sys_settings_set_accent((uint8_t)(key - '4'));
         notice = "Accent changed";
+        draw();
+    } else if (key >= '8' && key <= '9') {
+        sys_settings_set_font((uint8_t)(key - '8'));
+        notice = "Font changed";
+        draw();
+    } else if (key == '0') {
+        sys_settings_set_font(2);
+        notice = "Font changed";
         draw();
     }
 }

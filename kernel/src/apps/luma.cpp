@@ -767,6 +767,10 @@ void draw_settings_window(const DesktopWindow &window) {
     gfx_rect(window.x + 252, window.y + 158, 32, 22, 0x00F2487A);
     gfx_rect(window.x + 300, window.y + 158, 32, 22, 0x0000A86B);
     gfx_border(window.x + 153 + settings->accent * 48, window.y + 155, 38, 28, 0x00FFFFFF);
+    gfx_text_bold(window.x + 156, window.y + 210, "Font", 0x00FFFFFF);
+    gfx_text_bold(window.x + 156, window.y + 234, settings->font == 0 ? "[Pixel]" : " Pixel ", settings->font == 0 ? accent : 0x00D7DAE4);
+    gfx_text_bold(window.x + 236, window.y + 234, settings->font == 1 ? "[Clean]" : " Clean ", settings->font == 1 ? accent : 0x00D7DAE4);
+    gfx_text_bold(window.x + 316, window.y + 234, settings->font == 2 ? "[Bold]" : " Bold ", settings->font == 2 ? accent : 0x00D7DAE4);
 }
 
 void draw_window(DesktopWindow &window, uint8_t active) {
@@ -976,6 +980,13 @@ void handle_settings_click(const DesktopWindow &window, int x, int y) {
         else if (x >= window.x + 294 && x < window.x + 338) sys_settings_set_accent(3);
         else changed = 0;
         if (changed) notice = "Accent changed";
+    } else if (y >= window.y + 226 && y < window.y + 252) {
+        uint8_t changed = 1;
+        if (x >= window.x + 150 && x < window.x + 222) sys_settings_set_font(0);
+        else if (x >= window.x + 230 && x < window.x + 302) sys_settings_set_font(1);
+        else if (x >= window.x + 310 && x < window.x + 374) sys_settings_set_font(2);
+        else changed = 0;
+        if (changed) notice = "Font changed";
     }
 }
 
@@ -1128,6 +1139,10 @@ void handle_window_key(uint16_t key) {
         sys_settings_set_wallpaper(static_cast<uint8_t>(key - '1'));
     } else if (window.type == 4 && key >= '4' && key <= '7') {
         sys_settings_set_accent(static_cast<uint8_t>(key - '4'));
+    } else if (window.type == 4 && key >= '8' && key <= '9') {
+        sys_settings_set_font(static_cast<uint8_t>(key - '8'));
+    } else if (window.type == 4 && key == '0') {
+        sys_settings_set_font(2);
     } else if (window.type == 2 && (key == 'c' || key == 'C')) {
         paint_clear(window);
         window.painting = 0;
