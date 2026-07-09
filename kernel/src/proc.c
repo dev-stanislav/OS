@@ -4,7 +4,6 @@
 #include "vga.h"
 
 #define PROC_MAX 12
-#define PROC_NAME_MAX 24
 
 typedef struct {
     uint8_t used;
@@ -91,6 +90,20 @@ void proc_list(void) {
         vga_write(processes[i].name, VGA_COLOR_WHITE, VGA_COLOR_BLACK);
         vga_write("\n", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     }
+}
+
+uint8_t proc_snapshot(proc_info_t *out, uint8_t maximum) {
+    uint8_t count = 0;
+    if (!out || !maximum) return 0;
+    for (uint8_t i = 0; i < PROC_MAX && count < maximum; i++) {
+        if (!processes[i].used) continue;
+        out[count].is_protected = processes[i].protected;
+        out[count].pid = processes[i].pid;
+        out[count].started_ticks = processes[i].started_ticks;
+        kstrcpy(out[count].name, processes[i].name, sizeof(out[count].name));
+        count++;
+    }
+    return count;
 }
 
 void proc_poll(void) {
