@@ -3,10 +3,12 @@
 #include "gfx.h"
 static uint8_t packet[3],index;
 static int x=400,y=300;
-static uint8_t left;
+static uint8_t left,right,middle;
 static void wait_write(void){while(inb(0x64)&2);}
 static void send(uint8_t value){wait_write();outb(0x64,0xD4);wait_write();outb(0x60,value);}
 void mouse_init(void){wait_write();outb(0x64,0xA8);wait_write();outb(0x64,0x20);uint8_t status=inb(0x60)|2;wait_write();outb(0x64,0x60);wait_write();outb(0x60,status);send(0xF4);(void)inb(0x60);}
-void mouse_irq_handler(void){uint8_t value=inb(0x60);if(index==0&&!(value&0x08))return;packet[index++]=value;if(index<3)return;index=0;if(packet[0]&0xC0)return;left=packet[0]&1;int dx=(packet[0]&0x10)?(int)packet[1]-256:packet[1];int dy=(packet[0]&0x20)?(int)packet[2]-256:packet[2];if(dx>12)dx=12;if(dx<-12)dx=-12;if(dy>12)dy=12;if(dy<-12)dy=-12;x+=dx;y-=dy;if(x<0)x=0;if(y<0)y=0;if(x>=GFX_WIDTH)x=GFX_WIDTH-1;if(y>=GFX_HEIGHT)y=GFX_HEIGHT-1;gfx_cursor(x,y);}
+void mouse_irq_handler(void){uint8_t value=inb(0x60);if(index==0&&!(value&0x08))return;packet[index++]=value;if(index<3)return;index=0;if(packet[0]&0xC0)return;left=packet[0]&1;right=(packet[0]&2)?1:0;middle=(packet[0]&4)?1:0;int dx=(packet[0]&0x10)?(int)packet[1]-256:packet[1];int dy=(packet[0]&0x20)?(int)packet[2]-256:packet[2];if(dx>12)dx=12;if(dx<-12)dx=-12;if(dy>12)dy=12;if(dy<-12)dy=-12;x+=dx;y-=dy;if(x<0)x=0;if(y<0)y=0;if(x>=GFX_WIDTH)x=GFX_WIDTH-1;if(y>=GFX_HEIGHT)y=GFX_HEIGHT-1;gfx_cursor(x,y);}
 int mouse_x(void){return x;} int mouse_y(void){return y;}
 uint8_t mouse_left(void){return left;}
+uint8_t mouse_right(void){return right;}
+uint8_t mouse_middle(void){return middle;}

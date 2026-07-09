@@ -6,4 +6,6 @@ void mouse_irq_handler(void);
 int mouse_x(void);
 int mouse_y(void);
 uint8_t mouse_left(void);
+uint8_t mouse_right(void);
+uint8_t mouse_middle(void);
 #endif

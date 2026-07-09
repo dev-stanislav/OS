@@ -1,7 +1,9 @@
 extern "C" {
 #include "app.h"
+#include "../fs.h"
 #include "../gfx.h"
 #include "../keyboard.h"
+#include "../libk.h"
 #include "../mouse.h"
 #include "../rtc.h"
 #include "../timer.h"
@@ -19,6 +21,7 @@ constexpr uint32_t AccentSoft = 0x00008F90;
 constexpr uint32_t Pink = 0x00F2487A;
 constexpr uint32_t Violet = 0x0053337C;
 constexpr uint32_t NoHover = 255;
+constexpr uint8_t ContextCount = 6;
 
 struct Launcher {
     int x;
@@ -40,10 +43,26 @@ constexpr uint8_t launcher_count = static_cast<uint8_t>(sizeof(launchers) / size
 
 uint8_t menu;
 uint8_t last_left;
+uint8_t last_right;
 uint8_t hover_launcher;
 uint8_t hover_menu;
 uint8_t hover_dock;
+uint8_t hover_context;
+uint8_t context_menu;
+uint8_t wallpaper_style;
+int context_x;
+int context_y;
 uint32_t last_clock_second;
+const char *notice;
+
+constexpr const char *context_labels[ContextCount] = {
+    "New Folder",
+    "New Text Document",
+    "Open Files",
+    "Open Terminal",
+    "Refresh",
+    "Change Background",
+};
 
 uint32_t rgb(uint32_t r, uint32_t g, uint32_t b) {
     return (r << 16) | (g << 8) | b;
@@ -65,6 +84,11 @@ void text_shadow(int x, int y, const char *text, uint32_t color) {
 void two_digits(uint32_t value, char *out) {
     out[0] = static_cast<char>('0' + (value / 10u) % 10u);
     out[1] = static_cast<char>('0' + value % 10u);
+}
+
+void append_text(char *out, uint16_t cap, const char *text) {
+    size_t length = kstrlen(out);
+    kstrcpy(out + length, text, cap > length ? cap - length : 0);
 }
 
 uint32_t clock_seconds() {
@@ -113,11 +137,26 @@ void stars() {
 }
 
 void wallpaper() {
+    uint32_t top = 0x000B344D;
+    uint32_t mid = 0x002E2E68;
+    uint32_t glow = 0x00F2487A;
+    uint32_t ground = 0x000B2742;
+    if (wallpaper_style == 1) {
+        top = 0x00122A2A;
+        mid = 0x00304E56;
+        glow = 0x00E2C15E;
+        ground = 0x00091E23;
+    } else if (wallpaper_style == 2) {
+        top = 0x00121B34;
+        mid = 0x00442D5E;
+        glow = 0x0000D6D6;
+        ground = 0x000B182C;
+    }
     for (int y = 0; y < GFX_HEIGHT; y++) {
         uint32_t color;
-        if (y < 250) color = blend(0x000B344D, 0x002E2E68, static_cast<uint32_t>(y), 250);
-        else if (y < 420) color = blend(0x002E2E68, 0x00F2487A, static_cast<uint32_t>(y - 250), 170);
-        else color = blend(0x00B82163, 0x000B2742, static_cast<uint32_t>(y - 420), 180);
+        if (y < 250) color = blend(top, mid, static_cast<uint32_t>(y), 250);
+        else if (y < 420) color = blend(mid, glow, static_cast<uint32_t>(y - 250), 170);
+        else color = blend(glow, ground, static_cast<uint32_t>(y - 420), 180);
         gfx_rect(0, y, GFX_WIDTH, 1, color);
     }
     stars();
@@ -197,9 +236,48 @@ uint8_t menu_at(int x, int y) {
     return NoHover;
 }
 
+uint8_t context_at(int x, int y) {
+    if (!context_menu) return NoHover;
+    if (x < context_x || x >= context_x + 220) return NoHover;
+    if (y < context_y + 8 || y >= context_y + 8 + ContextCount * 28) return NoHover;
+    return static_cast<uint8_t>((y - context_y - 8) / 28);
+}
+
 void launch(uint8_t index) {
     if (index >= launcher_count) return;
     app_run(launchers[index].app, 0, 0);
+}
+
+void make_candidate(char *out, const char *base, const char *ext, uint8_t number) {
+    char text[8];
+    kstrcpy(out, base, FS_NAME_MAX + 1);
+    if (number > 1) {
+        append_text(out, FS_NAME_MAX + 1, " ");
+        kitoa(number, text, 10);
+        append_text(out, FS_NAME_MAX + 1, text);
+    }
+    append_text(out, FS_NAME_MAX + 1, ext);
+}
+
+void unique_name(char *out, const char *base, const char *ext) {
+    int cwd = app_get_workdir();
+    for (uint8_t number = 1; number < 99; number++) {
+        make_candidate(out, base, ext, number);
+        if (fs_resolve(out, cwd) < 0) return;
+    }
+    make_candidate(out, base, ext, 99);
+}
+
+void create_desktop_item(uint8_t folder) {
+    char name[FS_NAME_MAX + 1];
+    int cwd = app_get_workdir();
+    if (folder) {
+        unique_name(name, "New Folder", "");
+        notice = fs_create(name, FS_DIR, cwd) == FS_OK ? "Folder created" : "Cannot create folder";
+    } else {
+        unique_name(name, "New File", ".txt");
+        notice = fs_write(name, "", cwd) == FS_OK ? "Text document created" : "Cannot create file";
+    }
 }
 
 void top_panel() {
@@ -221,11 +299,12 @@ void top_panel() {
 }
 
 const char *status_text() {
+    if (context_menu && hover_context < ContextCount) return context_labels[hover_context];
     if (menu && hover_menu < launcher_count) return launchers[hover_menu].status;
     if (menu && hover_menu == 4) return "Exit to Shell";
     if (hover_dock < launcher_count) return launchers[hover_dock].status;
     if (hover_launcher < launcher_count) return launchers[hover_launcher].status;
-    return "Ready";
+    return notice ? notice : "Ready";
 }
 
 void dock() {
@@ -263,6 +342,50 @@ void start_menu() {
     menu_row(212, "Exit", hover_menu == 4);
 }
 
+void context_row(uint8_t index) {
+    int y = context_y + 8 + index * 28;
+    uint8_t active = hover_context == index;
+    gfx_rect(context_x + 8, y, 204, 26, active ? AccentSoft : Panel);
+    gfx_border(context_x + 8, y, 204, 26, active ? Accent : PanelLight);
+    gfx_text_bold(context_x + 18, y + 10, context_labels[index], White);
+}
+
+void context_menu_draw() {
+    if (!context_menu) return;
+    gfx_rect(context_x, context_y, 220, 184, PanelDark);
+    gfx_border(context_x, context_y, 220, 184, AccentSoft);
+    for (uint8_t i = 0; i < ContextCount; i++) context_row(i);
+}
+
+uint8_t context_action(uint8_t index) {
+    if (index == 0) create_desktop_item(1);
+    else if (index == 1) create_desktop_item(0);
+    else if (index == 2) {
+        app_run("tbf", 0, 0);
+        return 1;
+    } else if (index == 3) {
+        app_run("terminal", 0, 0);
+        return 1;
+    } else if (index == 4) notice = "Desktop refreshed";
+    else if (index == 5) {
+        wallpaper_style = static_cast<uint8_t>((wallpaper_style + 1) % 3);
+        notice = "Wallpaper changed";
+    }
+    return 0;
+}
+
+void open_context_menu(int x, int y) {
+    context_x = x;
+    context_y = y;
+    if (context_x > GFX_WIDTH - 226) context_x = GFX_WIDTH - 226;
+    if (context_y > GFX_HEIGHT - 190) context_y = GFX_HEIGHT - 190;
+    if (context_x < 4) context_x = 4;
+    if (context_y < 36) context_y = 36;
+    context_menu = 1;
+    menu = 0;
+    hover_context = context_at(x, y);
+}
+
 void draw() {
     gfx_cursor_hide();
     wallpaper();
@@ -270,6 +393,7 @@ void draw() {
     for (uint8_t i = 0; i < launcher_count; i++) desktop_icon(launchers[i], hover_launcher == i);
     start_menu();
     dock();
+    context_menu_draw();
     gfx_cursor(mouse_x(), mouse_y());
 }
 
@@ -279,9 +403,10 @@ extern "C" void app_luma_start(char **args, uint8_t count) {
     (void)args;
     (void)count;
     gfx_init();
-    menu = last_left = 0;
-    hover_launcher = hover_menu = hover_dock = NoHover;
+    menu = last_left = last_right = context_menu = 0;
+    hover_launcher = hover_menu = hover_dock = hover_context = NoHover;
     last_clock_second = 0xFFFFFFFFu;
+    notice = "Ready";
     draw();
 }
 
@@ -289,24 +414,44 @@ extern "C" void app_luma_tick(uint32_t ticks) {
     (void)ticks;
     int x = mouse_x();
     int y = mouse_y();
-    uint8_t next_launcher = launcher_at(x, y);
-    uint8_t next_dock = dock_at(x, y);
-    uint8_t next_menu = menu_at(x, y);
+    uint8_t next_launcher = context_menu ? NoHover : launcher_at(x, y);
+    uint8_t next_dock = context_menu ? NoHover : dock_at(x, y);
+    uint8_t next_menu = context_menu ? NoHover : menu_at(x, y);
+    uint8_t next_context = context_at(x, y);
     uint32_t second = clock_seconds();
     uint8_t redraw = 0;
     uint8_t click = mouse_left();
+    uint8_t right = mouse_right();
 
     if (next_launcher != hover_launcher || next_dock != hover_dock ||
-        next_menu != hover_menu || second != last_clock_second) {
+        next_menu != hover_menu || next_context != hover_context || second != last_clock_second) {
         hover_launcher = next_launcher;
         hover_dock = next_dock;
         hover_menu = next_menu;
+        hover_context = next_context;
         last_clock_second = second;
         redraw = 1;
     }
 
+    if (right && !last_right) {
+        open_context_menu(x, y);
+        redraw = 1;
+    }
+
     if (click && !last_left) {
-        if (y < 32 && x < 82) {
+        if (context_menu) {
+            if (hover_context != NoHover) {
+                uint8_t launched = context_action(hover_context);
+                context_menu = 0;
+                last_left = click;
+                last_right = right;
+                if (launched) return;
+                draw();
+                return;
+            }
+            context_menu = 0;
+            redraw = 1;
+        } else if (y < 32 && x < 82) {
             menu ^= 1;
             hover_menu = menu_at(x, y);
             redraw = 1;
@@ -314,18 +459,22 @@ extern "C" void app_luma_tick(uint32_t ticks) {
             if (hover_menu == 4) {
                 app_exit_gui();
                 last_left = click;
+                last_right = right;
                 return;
             }
             launch(hover_menu);
             last_left = click;
+            last_right = right;
             return;
         } else if (hover_dock != NoHover) {
             launch(hover_dock);
             last_left = click;
+            last_right = right;
             return;
         } else if (hover_launcher != NoHover) {
             launch(hover_launcher);
             last_left = click;
+            last_right = right;
             return;
         } else if (menu) {
             menu = 0;
@@ -336,6 +485,7 @@ extern "C" void app_luma_tick(uint32_t ticks) {
     if (redraw) draw();
     else gfx_cursor(x, y);
     last_left = click;
+    last_right = right;
 }
 
 extern "C" void app_luma_key(uint16_t key) {

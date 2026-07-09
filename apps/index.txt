@@ -10,7 +10,7 @@ mines 1.0 - 8x8 minesweeper.
 minifetch 1.0 - System information.
 paint 1.0 - Canvas drawing app.
 luma 1.0 - Minimal MiniOS framebuffer desktop.
-tbf 2.0 - Files.
+tbf 2.1 - File Manager.
 terminal 1.0 - Graphical command terminal.
 
 Install:
